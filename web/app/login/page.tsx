@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,7 +19,7 @@ import { useAutoClearState } from "../../lib/useAutoClearState";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { setAuthStatus } from "../../store/authSlice";
 
-const LoginPage = () => {
+const LoginPageContent = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -360,6 +360,14 @@ const LoginPage = () => {
         </div>
       </div>
     </main>
+  );
+};
+
+const LoginPage = () => {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <LoginPageContent />
+    </Suspense>
   );
 };
 
