@@ -53,6 +53,12 @@ export const Navbar = () => {
             <Phone className="h-4 w-4" />
             <span>313 531 6370</span>
           </a>
+          <Link
+            href="/login"
+            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Iniciar sesion
+          </Link>
           <a
             href="#contacto"
             className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
@@ -95,6 +101,13 @@ export const Navbar = () => {
               <Phone className="h-4 w-4" />
               313 531 6370
             </a>
+            <Link
+              href="/login"
+              className="rounded-lg bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              onClick={() => setMenuOpen(false)}
+            >
+              Iniciar sesion
+            </Link>
             <a
               href="#contacto"
               className="rounded-lg bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
