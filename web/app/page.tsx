@@ -1,23 +1,26 @@
-import Link from "next/link";
-import { Button } from "../components/design-system/Button";
+import { Navbar } from "../components/landing/Navbar";
+import { Hero } from "../components/landing/Hero";
+import { About } from "../components/landing/About";
+import { Services } from "../components/landing/Services";
+import { Coverage } from "../components/landing/Coverage";
+import { Contact } from "../components/landing/Contact";
+import { Footer } from "../components/landing/Footer";
+import { WhatsAppButton } from "../components/landing/WhatsAppButton";
 
 const HomePage = () => {
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <section className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Soft Tenantcore Platform
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Plataforma multi-tenant para gestión integral.
-        </p>
-        <Link href="/login">
-          <Button variant="primary" className="mt-6">
-            Iniciar sesión
-          </Button>
-        </Link>
-      </section>
-    </main>
+    <>
+      <Navbar />
+      <main>
+        <Hero />
+        <About />
+        <Services />
+        <Coverage />
+        <Contact />
+      </main>
+      <Footer />
+      <WhatsAppButton />
+    </>
   );
 };
 

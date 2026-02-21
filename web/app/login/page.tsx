@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../../components/design-system/Button";
@@ -165,107 +166,199 @@ const LoginPage = () => {
   }, []);
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <section className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        {showSessionConflict ? (
-          <Modal title="Sesión activa detectada">
-            <p className="text-sm text-slate-600">
-              Ya existe una sesión activa en otro dispositivo o navegador. Si
-              continúas aquí, la sesión anterior se cerrará automáticamente.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button onClick={handleForceLogin} disabled={isSubmitting}>
-                {isSubmitting ? "Procesando..." : "Cerrar la otra sesión"}
-              </Button>
-              <Button variant="outline" onClick={handleCancelForceLogin}>
-                Cancelar
-              </Button>
-            </div>
-          </Modal>
-        ) : null}
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Iniciar sesión
-          </h1>
-          <Link
-            href="/"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-          >
-            Volver al inicio
-          </Link>
-        </div>
-        {status ? (
-          <div className="mt-4">
-            <Toast
-              message={status.message}
-              variant={status.variant}
-              onClose={() => setStatus(null)}
-            />
+    <main className="flex min-h-screen bg-background">
+      {showSessionConflict ? (
+        <Modal title="Sesion activa detectada">
+          <p className="text-sm text-muted-foreground">
+            Ya existe una sesion activa en otro dispositivo o navegador. Si
+            continuas aqui, la sesion anterior se cerrara automaticamente.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={handleForceLogin} disabled={isSubmitting}>
+              {isSubmitting ? "Procesando..." : "Cerrar la otra sesion"}
+            </Button>
+            <Button variant="outline" onClick={handleCancelForceLogin}>
+              Cancelar
+            </Button>
           </div>
-        ) : null}
-        <form className="mt-6 grid gap-4" onSubmit={handleSubmit} noValidate>
-          <Input
-            label="Email"
-            name="email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="usuario@empresa.com"
-            required
+        </Modal>
+      ) : null}
+
+      {/* Left panel - branding */}
+      <div className="relative hidden w-1/2 overflow-hidden bg-foreground lg:flex lg:flex-col lg:justify-between">
+        <div className="absolute inset-0">
+          <img
+            src="/images/hero-truck.jpg"
+            alt=""
+            className="h-full w-full object-cover opacity-30"
           />
-          <Input
-            label="Contraseña"
-            name="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="********"
-            required
-          />
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-              />
-              Recordarme
-            </label>
-            <Link href="/forgot-password" className="text-blue-600 hover:underline">
-              ¿Olvidaste tu contraseña?
+        </div>
+        <div className="relative z-10 flex flex-1 flex-col justify-between p-12">
+          <Link href="/" className="flex items-center gap-3" aria-label="Volver al inicio">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-lg font-bold text-primary-foreground">
+              TN
+            </div>
+            <div>
+              <p className="text-sm font-bold leading-tight text-background">
+                Transportes
+              </p>
+              <p className="text-sm font-bold leading-tight text-primary">
+                NAUSA LTDA
+              </p>
+            </div>
+          </Link>
+
+          <div className="max-w-md">
+            <h2 className="text-balance text-3xl font-bold leading-tight tracking-tight text-background">
+              Transporte seguro y confiable en la Costa Caribe
+            </h2>
+            <p className="mt-4 text-pretty leading-relaxed text-background/70">
+              Mas de 18 anos conectando la industria colombiana con soluciones de
+              transporte terrestre de carga eficientes, seguras y puntuales.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <div className="flex items-center gap-2 rounded-lg border border-background/10 bg-background/5 px-4 py-2 backdrop-blur-sm">
+                <div className="h-2 w-2 rounded-full bg-secondary" />
+                <span className="text-sm font-medium text-background/80">Empresa habilitada</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-background/10 bg-background/5 px-4 py-2 backdrop-blur-sm">
+                <div className="h-2 w-2 rounded-full bg-secondary" />
+                <span className="text-sm font-medium text-background/80">Flota propia</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-background/40">
+            TRANSPORTES NAUSA LTDA. | NIT 900078756-1
+          </p>
+        </div>
+      </div>
+
+      {/* Right panel - login form */}
+      <div className="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2 lg:px-16">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="mb-10 flex items-center justify-between lg:hidden">
+            <Link href="/" className="flex items-center gap-3" aria-label="Volver al inicio">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-lg font-bold text-primary-foreground">
+                TN
+              </div>
+              <div>
+                <p className="text-sm font-bold leading-tight text-foreground">
+                  Transportes
+                </p>
+                <p className="text-sm font-bold leading-tight text-primary">
+                  NAUSA LTDA
+                </p>
+              </div>
+            </Link>
+            <Link
+              href="/"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+            >
+              Volver al inicio
             </Link>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isHuman}
-              onChange={(event) => setIsHuman(event.target.checked)}
-            />
-            No soy un robot
-          </label>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Ingresando..." : "Ingresar"}
-          </Button>
-          {hasSubmitted && !isHuman ? (
-            <p className="text-xs text-red-500">
-              Debes completar el reCAPTCHA antes de continuar.
+
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Iniciar sesion
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Ingresa tus credenciales para acceder al sistema
             </p>
+          </div>
+
+          {status ? (
+            <div className="mt-5">
+              <Toast
+                message={status.message}
+                variant={status.variant}
+                onClose={() => setStatus(null)}
+              />
+            </div>
           ) : null}
-        </form>
-        <div className="mt-6 flex items-center gap-4 text-xs text-slate-500">
-          <div className="h-px flex-1 bg-slate-200" />
-          <span>O inicia con</span>
-          <div className="h-px flex-1 bg-slate-200" />
+
+          <form className="mt-8 grid gap-5" onSubmit={handleSubmit} noValidate>
+            <Input
+              label="Email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="usuario@empresa.com"
+              required
+            />
+            <Input
+              label="Contrasena"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="********"
+              required
+            />
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                Recordarme
+              </label>
+              <Link
+                href="/forgot-password"
+                className="font-medium text-primary transition-colors hover:text-primary/80"
+              >
+                Olvidaste tu contrasena?
+              </Link>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={isHuman}
+                onChange={(event) => setIsHuman(event.target.checked)}
+                className="h-4 w-4 rounded border-border accent-primary"
+              />
+              No soy un robot
+            </label>
+            <Button type="submit" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? "Ingresando..." : "Ingresar"}
+            </Button>
+            {hasSubmitted && !isHuman ? (
+              <p className="text-xs text-primary">
+                Debes completar el reCAPTCHA antes de continuar.
+              </p>
+            ) : null}
+          </form>
+
+          <div className="mt-8 flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span>O inicia con</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Button variant="outline" onClick={() => handleSocialLogin("google")}>
+              Google
+            </Button>
+            <Button variant="outline" onClick={() => handleSocialLogin("facebook")}>
+              Facebook
+            </Button>
+          </div>
+
+          {/* Desktop back link */}
+          <div className="mt-8 hidden text-center lg:block">
+            <Link
+              href="/"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Volver al inicio
+            </Link>
+          </div>
         </div>
-        <div className="mt-4 grid gap-3">
-          <Button variant="outline" onClick={() => handleSocialLogin("google")}>
-            Continuar con Google
-          </Button>
-          <Button variant="outline" onClick={() => handleSocialLogin("facebook")}>
-            Continuar con Facebook
-          </Button>
-        </div>
-      </section>
+      </div>
     </main>
   );
 };
