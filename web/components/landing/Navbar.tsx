@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X, Phone } from "lucide-react";
+import { Button } from "../../components/design-system/Button";
 
 const navLinks = [
   { label: "Inicio", href: "#inicio" },
@@ -67,7 +68,7 @@ export const Navbar = () => {
           </a>
         </div>
 
-        <button
+        <Button
           type="button"
           className="rounded-lg p-2 text-foreground transition-colors hover:bg-muted md:hidden"
           onClick={() => setMenuOpen(!menuOpen)}
@@ -75,7 +76,7 @@ export const Navbar = () => {
           aria-expanded={menuOpen}
         >
           {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        </Button>
       </nav>
 
       {menuOpen && (
