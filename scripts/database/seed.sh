@@ -59,6 +59,9 @@ echo "[seed] Running roles and permissions seed..."
 echo "[seed] Running role-menu permissions seed..."
 "${PSQL_APP[@]}" -f "${SCRIPT_DIR}/007_seed_role_menu_permissions.sql"
 
+echo "[seed] Running TRANSPORTES NAUSA drivers seed..."
+"${PSQL_APP[@]}" -f "${SCRIPT_DIR}/008_seed_nausa_drivers.sql"
+
 echo "[seed] Running super admin seed..."
 "${PSQL_APP[@]}" \
   -v super_admin_email="$SEED_SUPER_ADMIN_EMAIL" \
