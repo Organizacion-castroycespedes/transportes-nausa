@@ -1,20 +1,22 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "disabled";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "disabled";
   size?: "sm" | "md" | "lg";
   children: ReactNode;
 };
 
 const variantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary:
-    "bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-600",
+    "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring",
   secondary:
-    "bg-slate-900 text-white shadow-sm hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-900",
+    "bg-foreground text-background shadow-sm hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-foreground",
+  outline:
+    "bg-transparent text-foreground border border-border hover:bg-muted",
   ghost:
-    "bg-transparent text-slate-900 border border-slate-200 hover:bg-slate-50",
+    "bg-transparent text-foreground border border-border hover:bg-muted",
   disabled:
-    "bg-transparent bg-slate-200 text-slate-400 border border-slate-200 focus-visible:ring-2 focus-visible:ring-slate-900",
+    "bg-muted text-muted-foreground border border-border focus-visible:ring-2 focus-visible:ring-ring",
 };
 
 const sizeStyles: Record<NonNullable<ButtonProps["size"]>, string> = {
