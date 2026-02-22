@@ -423,7 +423,7 @@ const ConfiguracionPage = () => {
   ]);
 
   useEffect(() => {
-    if (!isSuperAdmin && !isAdmin) {
+    if (!isSuperAdmin) {
       return;
     }
     setTenantFormsVisible(false);
