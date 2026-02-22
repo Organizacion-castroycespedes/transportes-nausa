@@ -31,6 +31,10 @@ type DriverRecord = {
   licencia_vencimiento: string | null;
   telefono: string | null;
   direccion: string | null;
+  vehiculo_placa: string | null;
+  vehiculo_tipo: string | null;
+  vehiculo_marca: string | null;
+  vehiculo_modelo: string | null;
   estado: string;
   persona_id: string | null;
   nombres: string | null;
@@ -65,6 +69,10 @@ export class DriversService {
       licenciaVencimiento: record.licencia_vencimiento,
       telefono: record.telefono,
       direccion: record.direccion,
+      vehiculoPlaca: record.vehiculo_placa,
+      vehiculoTipo: record.vehiculo_tipo,
+      vehiculoMarca: record.vehiculo_marca,
+      vehiculoModelo: record.vehiculo_modelo,
       estado: record.estado,
       persona: {
         id: record.persona_id,
@@ -92,6 +100,10 @@ export class DriversService {
         c.licencia_vencimiento::text,
         c.telefono,
         c.direccion,
+        c.vehiculo_placa,
+        c.vehiculo_tipo,
+        c.vehiculo_marca,
+        c.vehiculo_modelo,
         c.estado,
         p.id AS persona_id,
         p.nombres,
@@ -216,8 +228,9 @@ export class DriversService {
         `
           INSERT INTO conductores (
             tenant_id, user_id, licencia_numero, licencia_categoria,
-            licencia_vencimiento, telefono, direccion, estado
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,'A')
+            licencia_vencimiento, telefono, direccion, vehiculo_placa,
+            vehiculo_tipo, vehiculo_marca, vehiculo_modelo, estado
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'A')
           RETURNING id
         `,
         [
@@ -228,6 +241,10 @@ export class DriversService {
           payload.licenciaVencimiento ?? null,
           payload.telefono ?? null,
           payload.direccion ?? null,
+          payload.vehiculoPlaca?.trim().toUpperCase() || null,
+          payload.vehiculoTipo?.trim() || null,
+          payload.vehiculoMarca?.trim() || null,
+          payload.vehiculoModelo?.trim() || null,
         ]
       );
 
@@ -253,8 +270,12 @@ export class DriversService {
         licencia_vencimiento = COALESCE($3::date, licencia_vencimiento),
         telefono = COALESCE($4, telefono),
         direccion = COALESCE($5, direccion),
+        vehiculo_placa = COALESCE($6, vehiculo_placa),
+        vehiculo_tipo = COALESCE($7, vehiculo_tipo),
+        vehiculo_marca = COALESCE($8, vehiculo_marca),
+        vehiculo_modelo = COALESCE($9, vehiculo_modelo),
         updated_at = now()
-      WHERE id = $6 AND tenant_id = $7
+      WHERE id = $10 AND tenant_id = $11
       `,
       [
         payload.licenciaNumero ?? null,
@@ -262,6 +283,10 @@ export class DriversService {
         payload.licenciaVencimiento ?? null,
         payload.telefono ?? null,
         payload.direccion ?? null,
+        payload.vehiculoPlaca?.trim().toUpperCase() || null,
+        payload.vehiculoTipo?.trim() || null,
+        payload.vehiculoMarca?.trim() || null,
+        payload.vehiculoModelo?.trim() || null,
         id,
         tenantId,
       ]

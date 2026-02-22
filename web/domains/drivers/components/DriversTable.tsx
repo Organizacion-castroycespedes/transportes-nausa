@@ -16,6 +16,7 @@ export const DriversTable = ({ tenant, drivers }: Props) => (
         <tr>
           <th className="px-4 py-3">Conductor</th>
           <th className="px-4 py-3">Licencia</th>
+          <th className="px-4 py-3">Vehiculo</th>
           <th className="px-4 py-3">Estado</th>
           <th className="px-4 py-3 text-right">Acciones</th>
         </tr>
@@ -29,6 +30,10 @@ export const DriversTable = ({ tenant, drivers }: Props) => (
             <td className="px-4 py-3 text-slate-700">
               {driver.licenciaNumero || "Sin licencia"}{" "}
               {driver.licenciaCategoria ? `(${driver.licenciaCategoria})` : ""}
+            </td>
+            <td className="px-4 py-3 text-slate-700">
+              {driver.vehiculoPlaca || "Sin placa"}{" "}
+              {driver.vehiculoTipo ? `(${driver.vehiculoTipo})` : ""}
             </td>
             <td className="px-4 py-3">
               <span
