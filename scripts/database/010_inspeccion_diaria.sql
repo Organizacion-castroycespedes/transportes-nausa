@@ -1,8 +1,10 @@
+BEGIN;
+
 CREATE SCHEMA IF NOT EXISTS inspecciones;
 
 CREATE TABLE IF NOT EXISTS inspecciones.diarias (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   placa VARCHAR(20) NOT NULL,
   conductor VARCHAR(200) NOT NULL,
   cedula VARCHAR(50),
@@ -13,7 +15,7 @@ CREATE TABLE IF NOT EXISTS inspecciones.diarias (
   punto_critico BOOLEAN NOT NULL DEFAULT FALSE,
   hallazgos TEXT,
   acciones_correctivas TEXT,
-  created_by UUID REFERENCES users(id),
+  created_by UUID REFERENCES public.users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS inspecciones.archivos_pdf (
   diarias_id UUID NOT NULL REFERENCES inspecciones.diarias(id) ON DELETE CASCADE,
   archivo BYTEA NOT NULL,
   generado_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  generado_por UUID REFERENCES users(id)
+  generado_por UUID REFERENCES public.users(id)
 );
 
 CREATE INDEX IF NOT EXISTS inspecciones_archivos_pdf_diaria_idx
@@ -100,9 +102,9 @@ VALUES
   ('SEGURIDAD_SOCIAL', 'SOC_PENSION', 'PENSION', 3, TRUE)
 ON CONFLICT (codigo) DO NOTHING;
 
-INSERT INTO menu_items (tenant_id, key, module, label, route, visible, metadata)
+INSERT INTO public.menu_items (tenant_id, key, module, label, route, visible, metadata)
 SELECT t.id, 'INSPECCION_DIARIA', 'operaciones', 'Inspeccion diaria', '/{tenant}/inspeccion-diaria', TRUE, '{}'::jsonb
-FROM tenants t
+FROM public.tenants t
 ON CONFLICT (tenant_id, key) WHERE deleted_at IS NULL
 DO UPDATE SET
   module = EXCLUDED.module,
@@ -113,12 +115,91 @@ DO UPDATE SET
   deleted_at = NULL,
   updated_at = NOW();
 
-INSERT INTO role_menu_permissions (tenant_id, role_id, menu_item_id, access_level, actions)
+INSERT INTO public.role_menu_permissions (tenant_id, role_id, menu_item_id, access_level, actions)
 SELECT t.id, r.id, mi.id, 'WRITE', jsonb_build_object('read', true, 'write', true)
-FROM tenants t
-INNER JOIN roles r ON UPPER(r.nombre) IN ('ADMIN','SUPER_ADMIN','USER')
-INNER JOIN menu_items mi ON mi.tenant_id = t.id AND mi.key = 'INSPECCION_DIARIA' AND mi.deleted_at IS NULL
+FROM public.tenants t
+INNER JOIN public.roles r ON UPPER(r.nombre) IN ('ADMIN', 'SUPER_ADMIN', 'USER')
+INNER JOIN public.menu_items mi ON mi.tenant_id = t.id AND mi.key = 'INSPECCION_DIARIA' AND mi.deleted_at IS NULL
 ON CONFLICT (tenant_id, role_id, menu_item_id)
 DO UPDATE SET
   access_level = EXCLUDED.access_level,
   actions = EXCLUDED.actions;
+
+
+WITH seed_context AS (
+  SELECT
+    '24c80f41-1fd3-4622-a4ae-f717333bc04b'::UUID AS tenant_id,
+    'fd9de66d-2d41-4832-b1d3-11e65ffbcc1c'::UUID AS conductor_user_id
+),
+conductor_data AS (
+  SELECT
+    u.id AS user_id,
+    u.tenant_id,
+    c.vehiculo_placa,
+    COALESCE(NULLIF(btrim(COALESCE(p.nombres, '') || ' ' || COALESCE(p.apellidos, '')), ''), u.email, 'Conductor') AS conductor,
+    p.documento_numero AS cedula
+  FROM public.users u
+  INNER JOIN seed_context sc ON sc.tenant_id = u.tenant_id AND sc.conductor_user_id = u.id
+  LEFT JOIN public.personas p ON p.id = u.persona_id
+  LEFT JOIN public.conductores c ON c.user_id = u.id AND c.tenant_id = u.tenant_id
+),
+seed_diaria AS (
+  INSERT INTO inspecciones.diarias (
+    tenant_id,
+    placa,
+    conductor,
+    cedula,
+    fecha,
+    numero_manifiesto,
+    destino,
+    estado,
+    punto_critico,
+    hallazgos,
+    acciones_correctivas,
+    created_by
+  )
+  SELECT
+    cd.tenant_id,
+    COALESCE(NULLIF(BTRIM(cd.vehiculo_placa), ''), 'PENDIENTE'),
+    cd.conductor,
+    cd.cedula,
+    NOW(),
+    'SEED_INSPECCION_DIARIA_BASE',
+    'POR DEFINIR',
+    'DRAFT',
+    FALSE,
+    'Seed inicial de inspeccion diaria',
+    'Completar durante la inspeccion',
+    cd.user_id
+  FROM conductor_data cd
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM inspecciones.diarias d
+    WHERE d.tenant_id = cd.tenant_id
+      AND d.created_by = cd.user_id
+      AND d.numero_manifiesto = 'SEED_INSPECCION_DIARIA_BASE'
+  )
+  RETURNING id
+),
+diaria_target AS (
+  SELECT id FROM seed_diaria
+  UNION ALL
+  SELECT d_existing.id
+  FROM (
+    SELECT d.id
+    FROM inspecciones.diarias d
+    INNER JOIN seed_context sc ON sc.tenant_id = d.tenant_id
+    WHERE d.created_by = sc.conductor_user_id
+      AND d.numero_manifiesto = 'SEED_INSPECCION_DIARIA_BASE'
+    ORDER BY d.created_at DESC
+    LIMIT 1
+  ) AS d_existing
+)
+INSERT INTO inspecciones.diarias_respuestas (diarias_id, item_id, respuesta, observacion)
+SELECT dt.id, i.id, 'NA', 'Item precargado en seed inicial'
+FROM diaria_target dt
+CROSS JOIN inspecciones.items i
+WHERE i.activo = TRUE
+ON CONFLICT (diarias_id, item_id) DO NOTHING;
+
+COMMIT;

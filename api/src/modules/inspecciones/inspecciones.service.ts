@@ -52,6 +52,14 @@ type ItemRecord = {
 export class InspeccionesService {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
+  private hasRole(actor: Actor, role: string) {
+    return actor.roles.includes(role);
+  }
+
+  private isAdminLike(actor: Actor) {
+    return this.hasRole(actor, "ADMIN") || this.hasRole(actor, "SUPER_ADMIN");
+  }
+
   private resolveTenant(actor: Actor) {
     if (!actor.tenantId) {
       throw new ForbiddenException("Tenant requerido");
@@ -214,9 +222,33 @@ export class InspeccionesService {
     );
   }
 
+  private async assertUserDailyCreateLimit(actor: Actor, tenantId: string, fecha: string) {
+    if (this.isAdminLike(actor) || !this.hasRole(actor, "USER")) {
+      return;
+    }
+    if (!actor.userId) {
+      throw new ForbiddenException("Usuario requerido para registrar inspecciones");
+    }
+
+    const existing = await this.db.query(
+      `
+      SELECT id
+      FROM inspecciones.diarias
+      WHERE tenant_id = $1 AND created_by = $2 AND fecha = $3
+      LIMIT 1
+      `,
+      [tenantId, actor.userId, fecha]
+    );
+
+    if (existing.rows[0]) {
+      throw new BadRequestException("Ya registraste una inspección para esa fecha");
+    }
+  }
+
   async create(payload: UpsertInspeccionDiariaDto, actor: Actor) {
     this.validatePayload(payload);
     const tenantId = this.resolveTenant(actor);
+    await this.assertUserDailyCreateLimit(actor, tenantId, payload.fecha);
     const client = await this.db.getClient();
     try {
       await client.query("BEGIN");
@@ -260,7 +292,7 @@ export class InspeccionesService {
     this.validatePayload(payload);
     const tenantId = this.resolveTenant(actor);
     const current = await this.getByIdForTenant(id, tenantId);
-    if (current.estado !== "DRAFT") {
+    if (current.estado !== "DRAFT" && !(current.estado === "FINALIZED" && this.isAdminLike(actor))) {
       throw new BadRequestException("No se puede editar una inspección finalizada o reportada");
     }
 

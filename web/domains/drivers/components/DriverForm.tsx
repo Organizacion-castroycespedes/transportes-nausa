@@ -20,6 +20,10 @@ export const DriverForm = ({ initial, includePassword = false, onSubmit }: Props
       licenciaVencimiento: String(formData.get("licenciaVencimiento") ?? ""),
       telefono: String(formData.get("telefono") ?? ""),
       direccion: String(formData.get("direccion") ?? ""),
+      vehiculoPlaca: String(formData.get("vehiculoPlaca") ?? ""),
+      vehiculoTipo: String(formData.get("vehiculoTipo") ?? ""),
+      vehiculoMarca: String(formData.get("vehiculoMarca") ?? ""),
+      vehiculoModelo: String(formData.get("vehiculoModelo") ?? ""),
       persona: {
         nombres: String(formData.get("nombres") ?? ""),
         apellidos: String(formData.get("apellidos") ?? ""),
@@ -40,11 +44,15 @@ export const DriverForm = ({ initial, includePassword = false, onSubmit }: Props
         <Input name="documentoTipo" label="Tipo doc" defaultValue={initial?.persona?.documentoTipo ?? "CC"} required />
         <Input name="documentoNumero" label="Documento" defaultValue={initial?.persona?.documentoNumero ?? ""} required />
         <Input name="licenciaNumero" label="Licencia" defaultValue={initial?.licenciaNumero ?? ""} />
-        <Input name="licenciaCategoria" label="Categoría" defaultValue={initial?.licenciaCategoria ?? ""} />
+        <Input name="licenciaCategoria" label="Categoria" defaultValue={initial?.licenciaCategoria ?? ""} />
         <Input name="licenciaVencimiento" label="Vencimiento" type="date" defaultValue={initial?.licenciaVencimiento ?? ""} />
-        <Input name="telefono" label="Teléfono" defaultValue={initial?.telefono ?? ""} />
+        <Input name="telefono" label="Telefono" defaultValue={initial?.telefono ?? ""} />
+        <Input name="vehiculoPlaca" label="Placa vehiculo" defaultValue={initial?.vehiculoPlaca ?? ""} />
+        <Input name="vehiculoTipo" label="Tipo vehiculo" defaultValue={initial?.vehiculoTipo ?? ""} />
+        <Input name="vehiculoMarca" label="Marca vehiculo" defaultValue={initial?.vehiculoMarca ?? ""} />
+        <Input name="vehiculoModelo" label="Modelo vehiculo" defaultValue={initial?.vehiculoModelo ?? ""} />
       </div>
-      <Input name="direccion" label="Dirección" defaultValue={initial?.direccion ?? ""} />
+      <Input name="direccion" label="Direccion" defaultValue={initial?.direccion ?? ""} />
       <Button type="submit">Guardar</Button>
     </form>
   );

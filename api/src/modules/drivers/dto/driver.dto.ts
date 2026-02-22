@@ -17,6 +17,10 @@ export type CreateDriverDto = {
   licenciaVencimiento?: string | null;
   telefono?: string | null;
   direccion?: string | null;
+  vehiculoPlaca?: string | null;
+  vehiculoTipo?: string | null;
+  vehiculoMarca?: string | null;
+  vehiculoModelo?: string | null;
   persona: DriverPersonaDto;
 };
 
@@ -27,6 +31,10 @@ export type UpdateDriverDto = {
   licenciaVencimiento?: string | null;
   telefono?: string | null;
   direccion?: string | null;
+  vehiculoPlaca?: string | null;
+  vehiculoTipo?: string | null;
+  vehiculoMarca?: string | null;
+  vehiculoModelo?: string | null;
   persona?: Partial<DriverPersonaDto>;
 };
 
@@ -45,6 +53,10 @@ export type DriverResponseDto = {
   licenciaVencimiento: string | null;
   telefono: string | null;
   direccion: string | null;
+  vehiculoPlaca: string | null;
+  vehiculoTipo: string | null;
+  vehiculoMarca: string | null;
+  vehiculoModelo: string | null;
   estado: string;
   persona: {
     id: string | null;

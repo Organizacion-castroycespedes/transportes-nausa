@@ -14,8 +14,17 @@ CREATE TABLE IF NOT EXISTS public.conductores (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE IF EXISTS public.conductores
+  ADD COLUMN IF NOT EXISTS vehiculo_placa varchar(20),
+  ADD COLUMN IF NOT EXISTS vehiculo_tipo varchar(50),
+  ADD COLUMN IF NOT EXISTS vehiculo_marca varchar(80),
+  ADD COLUMN IF NOT EXISTS vehiculo_modelo varchar(80);
+
 CREATE INDEX IF NOT EXISTS idx_conductores_tenant ON public.conductores (tenant_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_conductores_user ON public.conductores (user_id);
+CREATE INDEX IF NOT EXISTS idx_conductores_tenant_vehiculo_placa
+  ON public.conductores (tenant_id, vehiculo_placa)
+  WHERE vehiculo_placa IS NOT NULL;
 
 INSERT INTO public.tenants (slug, nombre, config, activo)
 VALUES (
@@ -187,7 +196,18 @@ conductor_user AS (
   LIMIT 1
 )
 INSERT INTO public.conductores (
-  tenant_id, user_id, licencia_numero, licencia_categoria, licencia_vencimiento, telefono, direccion, estado
+  tenant_id,
+  user_id,
+  licencia_numero,
+  licencia_categoria,
+  licencia_vencimiento,
+  telefono,
+  direccion,
+  vehiculo_placa,
+  vehiculo_tipo,
+  vehiculo_marca,
+  vehiculo_modelo,
+  estado
 )
 SELECT
   c.tenant_id,
@@ -197,9 +217,29 @@ SELECT
   (CURRENT_DATE + INTERVAL '2 years')::date,
   '3135316370',
   'Carrera 39 #8-59 Malambo – Atlántico',
+  'TMY381',
+  'Camion',
+  'Chevrolet',
+  'NKR III',
   'A'
 FROM conductor_user c
-ON CONFLICT (user_id) DO NOTHING;
+ON CONFLICT (user_id)
+DO UPDATE SET
+  licencia_numero = EXCLUDED.licencia_numero,
+  licencia_categoria = EXCLUDED.licencia_categoria,
+  licencia_vencimiento = EXCLUDED.licencia_vencimiento,
+  telefono = EXCLUDED.telefono,
+  direccion = EXCLUDED.direccion,
+  vehiculo_placa = UPPER(EXCLUDED.vehiculo_placa),
+  vehiculo_tipo = EXCLUDED.vehiculo_tipo,
+  vehiculo_marca = EXCLUDED.vehiculo_marca,
+  vehiculo_modelo = EXCLUDED.vehiculo_modelo,
+  estado = EXCLUDED.estado,
+  updated_at = now();
+
+UPDATE public.conductores
+SET vehiculo_placa = UPPER(BTRIM(vehiculo_placa))
+WHERE vehiculo_placa IS NOT NULL;
 
 WITH tenant_target AS (
   SELECT id FROM public.tenants WHERE slug = 'transportes-nausa' LIMIT 1
@@ -280,3 +320,4 @@ JOIN public.menu_items mi ON mi.tenant_id = t.id AND mi.key = pm.menu_key AND mi
 ON CONFLICT (tenant_id, role_id, menu_item_id) DO NOTHING;
 
 COMMIT;
+

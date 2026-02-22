@@ -9,6 +9,10 @@ export type DriverResponse = {
   licenciaVencimiento: string | null;
   telefono: string | null;
   direccion: string | null;
+  vehiculoPlaca: string | null;
+  vehiculoTipo: string | null;
+  vehiculoMarca: string | null;
+  vehiculoModelo: string | null;
   estado: string;
   persona: {
     id: string | null;
@@ -30,6 +34,10 @@ export type CreateDriverPayload = {
   licenciaVencimiento?: string;
   telefono?: string;
   direccion?: string;
+  vehiculoPlaca?: string;
+  vehiculoTipo?: string;
+  vehiculoMarca?: string;
+  vehiculoModelo?: string;
   persona: {
     nombres: string;
     apellidos: string;
