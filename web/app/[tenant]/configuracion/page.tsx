@@ -145,7 +145,9 @@ const ConfiguracionPage = () => {
   const companyDetails = useAppSelector((state) => state.company.details);
   const authUser = useAppSelector((state) => state.auth.user);
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
-    authUser?.role === "SUPER_ADMIN" ? "empresa" : "sucursales"
+    authUser?.role === "SUPER_ADMIN" || authUser?.role === "ADMIN"
+      ? "empresa"
+      : "sucursales"
   );
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(false);
@@ -435,7 +437,7 @@ const ConfiguracionPage = () => {
       setSelectedTenantId(currentTenantId);
       setTenantFormsVisible(true);
     }
-    setActiveTab("sucursales");
+    setActiveTab("empresa");
   }, [currentTenantId, isSuperAdmin]);
 
   useEffect(() => {
@@ -651,6 +653,7 @@ const ConfiguracionPage = () => {
   }, [
     activeTab,
     buildBrandingForm,
+    isAdmin,
     isCurrentTenant,
     isSuperAdmin,
     selectedTenantId,
@@ -675,8 +678,13 @@ const ConfiguracionPage = () => {
   }, [activeTab, shouldScrollToCompanyForm, tenantFormsVisible]);
 
   const tabs = useMemo(() => {
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && isAdmin) {
       return [
+        {
+          key: "empresa" as const,
+          label: "Empresa",
+          icon: Building2,
+        },
         {
           key: "sucursales" as const,
           label: "Sucursales",
@@ -701,7 +709,7 @@ const ConfiguracionPage = () => {
         icon: MapPin,
       },
     ];
-  }, [isSuperAdmin]);
+  }, [isAdmin, isSuperAdmin]);
 
   const handleCompanyChange = (field: string, value: string | boolean) => {
     setCompanyForm((prev) => ({
@@ -792,17 +800,21 @@ const ConfiguracionPage = () => {
             <Save className="h-4 w-4" />
             Guardar
           </Button>
-          <Button
-            variant="ghost"
-            onClick={handleResetCompany}
-            disabled={!isCompanyFormComplete}
-          >
-            <Trash2 className="h-4 w-4" />
-            Eliminar
-          </Button>
-          <Button variant="ghost" onClick={closeTenantModal}>
-            Cerrar
-          </Button>
+          {isSuperAdmin ? (
+            <Button
+              variant="ghost"
+              onClick={handleResetCompany}
+              disabled={!isCompanyFormComplete}
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar
+            </Button>
+          ) : null}
+          {isSuperAdmin ? (
+            <Button variant="ghost" onClick={closeTenantModal}>
+              Cerrar
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -1511,7 +1523,9 @@ const ConfiguracionPage = () => {
         );
       }
       setStatusSuccess("Información de empresa actualizada.");
-      setTenantFormsVisible(false);
+      if (isSuperAdmin) {
+        setTenantFormsVisible(false);
+      }
     } catch {
       setStatusError("No fue posible guardar la información de la empresa.");
     }
@@ -1812,12 +1826,12 @@ const ConfiguracionPage = () => {
           Configuración
         </p>
         <h2 className="text-2xl font-semibold text-slate-900">
-          {isSuperAdmin ? "Empresas, Branding y Sucursales" : "Sucursales"}
+          {isSuperAdmin ? "Empresas, Branding y Sucursales" : "Empresa y Sucursales"}
         </h2>
         <p className="max-w-2xl text-sm text-slate-600">
           {isSuperAdmin
             ? "Administra la información legal, tributaria, branding y sucursales de cada tenant."
-            : "Administra las sucursales del tenant al que perteneces."}
+            : "Administra la información de tu tenant y sus sucursales."}
         </p>
       </header>
 
