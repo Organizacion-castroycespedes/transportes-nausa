@@ -8,6 +8,7 @@ import { LocationsModule } from "./locations/locations.module";
 import { RolesModule } from "./roles/roles.module";
 import { MenuModule } from "./menu/menu.module";
 import { DriversModule } from "./drivers/drivers.module";
+import { InspeccionesModule } from "./inspecciones/inspecciones.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DriversModule } from "./drivers/drivers.module";
     RolesModule,
     MenuModule,
     DriversModule,
+    InspeccionesModule,
   ],
 })
 export class AppModule {}
