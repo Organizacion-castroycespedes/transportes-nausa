@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -60,6 +61,18 @@ export class RolesController {
     return roles.filter((role) => role.nombre !== "SUPER_ADMIN");
   }
 
+  private ensureCanWriteRole(
+    actor: ReturnType<RolesController["buildActor"]>,
+    roleName?: string
+  ) {
+    if (this.isSuperAdmin(actor)) {
+      return;
+    }
+    if (roleName?.trim().toUpperCase() === "SUPER_ADMIN") {
+      throw new ForbiddenException("No autorizado");
+    }
+  }
+
   @Get()
   @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_ROLES, level: "READ" })
@@ -70,24 +83,24 @@ export class RolesController {
   }
 
   @Post()
-  @Roles("SUPER_ADMIN")
+  @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_ROLES, level: "WRITE" })
   create(@Body() payload: CreateRoleDto, @Req() request: AuthRequest) {
-    return this.rolesService.createRole(payload, this.buildActor(request));
+    const actor = this.buildActor(request);
+    this.ensureCanWriteRole(actor, payload.nombre);
+    return this.rolesService.createRole(payload, actor);
   }
 
   @Put(":id")
-  @Roles("SUPER_ADMIN")
+  @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_ROLES, level: "WRITE" })
   update(
     @Param("id") roleId: string,
     @Body() payload: UpdateRoleDto,
     @Req() request: AuthRequest
   ) {
-    return this.rolesService.updateRole(
-      roleId,
-      payload,
-      this.buildActor(request)
-    );
+    const actor = this.buildActor(request);
+    this.ensureCanWriteRole(actor, payload.nombre);
+    return this.rolesService.updateRole(roleId, payload, actor);
   }
 }

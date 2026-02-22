@@ -15,6 +15,15 @@ type PermissionCache = {
   permissions: Map<string, PermissionSummary>;
 };
 
+const PERMISSION_KEY_ALIASES: Record<string, string[]> = {
+  CONFIG_USUARIOS: ["USUARIOS_TENANT_USUARIOS"],
+  USUARIOS_TENANT_USUARIOS: ["CONFIG_USUARIOS"],
+  CONFIG_ROLES: ["ROLES_TENANT_ROLES"],
+  ROLES_TENANT_ROLES: ["CONFIG_ROLES"],
+  CONFIG_GENERAL: ["CONFIGURACION_TENANT_CONFIGURACION"],
+  CONFIGURACION_TENANT_CONFIGURACION: ["CONFIG_GENERAL"],
+};
+
 @Injectable()
 export class AccessControlService {
   constructor(
@@ -66,23 +75,27 @@ export class AccessControlService {
       access_level: PermissionAccessLevel;
       actions: Record<string, boolean> | null;
     }>) {
-      const existing = map.get(row.key);
       const actions = row.actions ?? {};
-      if (!existing) {
-        map.set(row.key, {
-          key: row.key,
-          module: row.module,
-          route: row.route,
-          accessLevel: row.access_level,
-          actions: { ...actions },
-        });
-        continue;
-      }
-      if (row.access_level === "WRITE") {
-        existing.accessLevel = "WRITE";
-      }
-      for (const [action, allowed] of Object.entries(actions)) {
-        existing.actions[action] = existing.actions[action] || Boolean(allowed);
+      const keys = [row.key, ...(PERMISSION_KEY_ALIASES[row.key] ?? [])];
+
+      for (const key of keys) {
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, {
+            key,
+            module: row.module,
+            route: row.route,
+            accessLevel: row.access_level,
+            actions: { ...actions },
+          });
+          continue;
+        }
+        if (row.access_level === "WRITE") {
+          existing.accessLevel = "WRITE";
+        }
+        for (const [action, allowed] of Object.entries(actions)) {
+          existing.actions[action] = existing.actions[action] || Boolean(allowed);
+        }
       }
     }
     return map;

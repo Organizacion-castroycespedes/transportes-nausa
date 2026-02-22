@@ -49,6 +49,7 @@ const RolesPage = () => {
   const [canWrite, setCanWrite] = useState(false);
   const authUser = useAppSelector((state) => state.auth.user);
   const permissions = useAppSelector((state) => state.menu.permissions);
+  const isSuperAdmin = authUser?.role === "SUPER_ADMIN";
 
   useAutoClearState(toastMessage, setToastMessage);
 
@@ -107,6 +108,21 @@ const RolesPage = () => {
   }, [buildAuthHeaders, showToast]);
 
   const loadTenants = useCallback(async () => {
+    if (!isSuperAdmin) {
+      if (authUser?.tenantId) {
+        setTenants([
+          {
+            id: authUser.tenantId,
+            slug: authUser.tenantId,
+            nombre: authUser.tenantName ?? authUser.tenantId,
+            activo: true,
+          },
+        ]);
+      } else {
+        setTenants([]);
+      }
+      return;
+    }
     setTenantsLoading(true);
     try {
       const result = await listTenants();
@@ -116,7 +132,7 @@ const RolesPage = () => {
     } finally {
       setTenantsLoading(false);
     }
-  }, [showToast]);
+  }, [authUser?.tenantId, authUser?.tenantName, isSuperAdmin, showToast]);
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -152,7 +168,10 @@ const RolesPage = () => {
     }
     setRoleModalMode("create");
     setRoleEditingId(null);
-    setRoleForm({ ...emptyRoleForm });
+    setRoleForm({
+      ...emptyRoleForm,
+      tenantIds: !isSuperAdmin && authUser?.tenantId ? [authUser.tenantId] : [],
+    });
     setRoleModalOpen(true);
   };
 
@@ -358,7 +377,7 @@ const RolesPage = () => {
               value={roleForm.tenantIds}
               onChange={handleTenantSelect}
               className="min-h-[140px]"
-              disabled={tenantsLoading}
+              disabled={tenantsLoading || !isSuperAdmin}
             >
               {tenantOptions.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>

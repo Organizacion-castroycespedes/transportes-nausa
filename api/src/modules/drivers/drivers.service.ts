@@ -164,7 +164,7 @@ export class DriversService {
       }
 
       const role = await client.query<{ id: string }>(
-        `SELECT id FROM roles WHERE nombre = 'USER' LIMIT 1`
+        `SELECT id FROM roles WHERE upper(nombre) = 'USER' LIMIT 1`
       );
       if (!role.rows[0]) {
         throw new BadRequestException("Rol USER no existe");
@@ -307,10 +307,43 @@ export class DriversService {
 
   async updateStatus(id: string, payload: UpdateDriverStatusDto, actor: ActorContext) {
     const tenantId = this.resolveTenant(actor);
-    await this.db.query(
-      `UPDATE conductores SET estado = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3`,
-      [payload.estado, id, tenantId]
-    );
+    const client = await this.db.getClient();
+    try {
+      await client.query("BEGIN");
+      const updateDriver = await client.query<{ user_id: string }>(
+        `
+          UPDATE conductores
+          SET estado = $1, updated_at = now()
+          WHERE id = $2 AND tenant_id = $3
+          RETURNING user_id
+        `,
+        [payload.estado, id, tenantId]
+      );
+
+      const driver = updateDriver.rows[0];
+      if (!driver) {
+        throw new NotFoundException("Conductor no encontrado");
+      }
+
+      if (payload.estado === "I") {
+        await client.query(
+          `
+            UPDATE users
+            SET estado = 'INACTIVE'
+            WHERE id = $1 AND tenant_id = $2
+          `,
+          [driver.user_id, tenantId]
+        );
+      }
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
     return this.getById(id, actor);
   }
 

@@ -293,13 +293,42 @@ DO UPDATE SET
 WITH tenant_target AS (
   SELECT id FROM public.tenants WHERE slug = 'transportes-nausa' LIMIT 1
 ),
+ensure_parent_menu AS (
+  INSERT INTO public.menu_items (
+    tenant_id,
+    key,
+    module,
+    label,
+    route,
+    icon,
+    parent_id,
+    sort_order,
+    visible,
+    below_main_menu,
+    metadata
+  )
+  SELECT
+    t.id,
+    'CONFIGURACION_TENANT_CONFIGURACION',
+    'configuracion',
+    'Configuración',
+    '/{tenant}/configuracion',
+    NULL::text,
+    NULL::uuid,
+    0,
+    true,
+    false,
+    '{}'::jsonb
+  FROM tenant_target t
+  ON CONFLICT (tenant_id, key) WHERE deleted_at IS NULL
+  DO UPDATE SET
+    deleted_at = NULL,
+    updated_at = now()
+  RETURNING id, tenant_id
+),
 parent_menu AS (
   SELECT id, tenant_id
-  FROM public.menu_items
-  WHERE tenant_id = (SELECT id FROM tenant_target)
-    AND key IN ('CONFIGURACION_TENANT_CONFIGURACION', 'CONFIG_GENERAL')
-    AND deleted_at IS NULL
-  ORDER BY key = 'CONFIGURACION_TENANT_CONFIGURACION' DESC
+  FROM ensure_parent_menu
   LIMIT 1
 )
 INSERT INTO public.menu_items (
@@ -317,8 +346,10 @@ INSERT INTO public.menu_items (
 )
 SELECT p.tenant_id, x.key, x.module, x.label, x.route, x.icon, x.parent_id, x.sort_order, true, false, '{}'::jsonb
 FROM parent_menu p
-JOIN (
+JOIN LATERAL (
   VALUES
+    ('USUARIOS_TENANT_USUARIOS', 'usuarios', 'Usuarios', '/{tenant}/usuarios', 'User', p.id, 5),
+    ('ROLES_TENANT_ROLES', 'roles', 'Roles', '/{tenant}/roles', 'Users', p.id, 6),
     ('CONFIG_CONDUCTORES', 'configuracion', 'Conductores', '/{tenant}/configuracion/conductores', 'IdCard', p.id, 10),
     ('INSPECCION_DIARIA', 'inspeccion', 'Inspección Diaria', '/{tenant}/inspeccion-diaria', 'ClipboardCheck', NULL::uuid, 20),
     ('PERFIL_PROPIO', 'perfil', 'Mi Perfil', '/{tenant}/mi-perfil', 'User', NULL::uuid, 21)
@@ -342,8 +373,14 @@ WITH tenant_target AS (
 ),
 permission_matrix AS (
   SELECT * FROM (VALUES
+    ('SUPER_ADMIN', 'USUARIOS_TENANT_USUARIOS', 'READ'),
+    ('SUPER_ADMIN', 'ROLES_TENANT_ROLES', 'READ'),
+    ('SUPER_ADMIN', 'CONFIG_MENU', 'WRITE'),
     ('SUPER_ADMIN', 'CONFIG_CONDUCTORES', 'WRITE'),
     ('SUPER_ADMIN', 'INSPECCION_DIARIA', 'WRITE'),
+    ('ADMIN', 'CONFIGURACION_TENANT_CONFIGURACION', 'WRITE'),
+    ('ADMIN', 'USUARIOS_TENANT_USUARIOS', 'WRITE'),
+    ('ADMIN', 'ROLES_TENANT_ROLES', 'WRITE'),
     ('ADMIN', 'CONFIG_CONDUCTORES', 'WRITE'),
     ('ADMIN', 'INSPECCION_DIARIA', 'WRITE'),
     ('USER', 'INSPECCION_DIARIA', 'WRITE'),
