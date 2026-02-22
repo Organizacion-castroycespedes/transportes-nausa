@@ -23,6 +23,10 @@ export class RolesService {
     @Inject(DatabaseService) private readonly db: DatabaseService
   ) {}
 
+  private isSuperAdmin(actor: ActorContext) {
+    return actor.roles.includes("SUPER_ADMIN");
+  }
+
   async listRoles(actor: ActorContext): Promise<RoleRecord[]> {
     const userId = this.ensureUserId(actor);
     const result = await this.db.query<RoleRecord>(
@@ -53,6 +57,9 @@ export class RolesService {
     const nombre = payload.nombre?.trim();
     if (!nombre) {
       throw new BadRequestException("Nombre requerido");
+    }
+    if (!this.isSuperAdmin(actor) && nombre.toUpperCase() === "SUPER_ADMIN") {
+      throw new BadRequestException("Nombre de rol no permitido");
     }
     const userId = this.ensureUserId(actor);
     const tenantIds = this.normalizeTenantIds(payload.tenantIds);
@@ -125,6 +132,9 @@ export class RolesService {
       const role = updated.rows[0];
       if (!role) {
         throw new NotFoundException("Rol no encontrado");
+      }
+      if (!this.isSuperAdmin(actor) && role.nombre === "SUPER_ADMIN") {
+        throw new BadRequestException("No autorizado para editar este rol");
       }
 
       if (tenantIds !== null) {

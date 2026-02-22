@@ -1,14 +1,18 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Post,
   Put,
+  Req,
   UseGuards,
   Inject,
 } from "@nestjs/common";
+import type { Request } from "express";
 import { RequirePermission } from "../../common/decorators/require-permission.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { MENU_KEYS } from "../../common/constants/menu-keys";
@@ -27,6 +31,33 @@ export class TenantsController {
   constructor(
     @Inject(TenantsService) private readonly tenantsService: TenantsService
   ) {}
+
+  private buildActor(request: Request & { user?: { roles?: string[]; tenantId?: string } }) {
+    const roles = Array.isArray(request.user?.roles) ? request.user.roles : [];
+    return {
+      roles,
+      tenantId: request.user?.tenantId,
+    };
+  }
+
+  private resolveTenantScope(
+    tenantId: string,
+    actor: ReturnType<TenantsController["buildActor"]>
+  ) {
+    if (actor.roles.includes("SUPER_ADMIN")) {
+      return tenantId;
+    }
+    if (!actor.roles.includes("ADMIN")) {
+      throw new ForbiddenException("No autorizado");
+    }
+    if (!actor.tenantId) {
+      throw new BadRequestException("Tenant requerido");
+    }
+    if (tenantId !== actor.tenantId) {
+      throw new ForbiddenException("No autorizado para otro tenant");
+    }
+    return actor.tenantId;
+  }
 
   @Get()
   @Roles("SUPER_ADMIN")
@@ -50,30 +81,65 @@ export class TenantsController {
   }
 
   @Get(":id/config")
-  getConfig(@Param("id") tenantId: string) {
-    return this.tenantsService.getConfig(tenantId);
+  @Roles("SUPER_ADMIN", "ADMIN")
+  @RequirePermission({ menuKey: MENU_KEYS.CONFIG_GENERAL, level: "READ" })
+  getConfig(@Param("id") tenantId: string, @Req() request: Request) {
+    const resolvedTenantId = this.resolveTenantScope(
+      tenantId,
+      this.buildActor(request)
+    );
+    return this.tenantsService.getConfig(resolvedTenantId);
   }
 
   @Put(":id/config")
+  @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_GENERAL, level: "WRITE" })
-  updateConfig(@Param("id") tenantId: string, @Body() body: { config: unknown }) {
-    return this.tenantsService.updateConfig(tenantId, body?.config ?? {});
+  updateConfig(
+    @Param("id") tenantId: string,
+    @Body() body: { config: unknown },
+    @Req() request: Request
+  ) {
+    const resolvedTenantId = this.resolveTenantScope(
+      tenantId,
+      this.buildActor(request)
+    );
+    return this.tenantsService.updateConfig(resolvedTenantId, body?.config ?? {});
   }
 
   @Get(":id/details")
-  getDetails(@Param("id") tenantId: string) {
-    return this.tenantsService.getDetails(tenantId);
+  @Roles("SUPER_ADMIN", "ADMIN")
+  @RequirePermission({ menuKey: MENU_KEYS.CONFIG_GENERAL, level: "READ" })
+  getDetails(@Param("id") tenantId: string, @Req() request: Request) {
+    const resolvedTenantId = this.resolveTenantScope(
+      tenantId,
+      this.buildActor(request)
+    );
+    return this.tenantsService.getDetails(resolvedTenantId);
   }
 
   @Put(":id/details")
+  @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_GENERAL, level: "WRITE" })
-  upsertDetails(@Param("id") tenantId: string, @Body() body: TenantDetailsInput) {
-    return this.tenantsService.upsertDetails(tenantId, body);
+  upsertDetails(
+    @Param("id") tenantId: string,
+    @Body() body: TenantDetailsInput,
+    @Req() request: Request
+  ) {
+    const resolvedTenantId = this.resolveTenantScope(
+      tenantId,
+      this.buildActor(request)
+    );
+    return this.tenantsService.upsertDetails(resolvedTenantId, body);
   }
 
   @Delete(":id/details")
+  @Roles("SUPER_ADMIN", "ADMIN")
   @RequirePermission({ menuKey: MENU_KEYS.CONFIG_GENERAL, level: "WRITE" })
-  deleteDetails(@Param("id") tenantId: string) {
-    return this.tenantsService.deleteDetails(tenantId);
+  deleteDetails(@Param("id") tenantId: string, @Req() request: Request) {
+    const resolvedTenantId = this.resolveTenantScope(
+      tenantId,
+      this.buildActor(request)
+    );
+    return this.tenantsService.deleteDetails(resolvedTenantId);
   }
 }
