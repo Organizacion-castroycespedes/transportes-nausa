@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -32,16 +32,37 @@ export default function InspeccionDiariaPage() {
   const [conductorFilter, setConductorFilter] = useState("");
   const [placaFilter, setPlacaFilter] = useState("");
   const [page, setPage] = useState(1);
+  const isUserRole = authUser?.role === "USER";
+
+  const normalizeOwnerValue = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+  const isOwnInspeccion = (row: InspeccionDiaria) => {
+    if (!isUserRole) {
+      return true;
+    }
+
+    const authUserId = normalizeOwnerValue(authUser?.id);
+    const rowCreatedBy = normalizeOwnerValue(row.createdBy);
+    if (authUserId && rowCreatedBy && authUserId === rowCreatedBy) {
+      return true;
+    }
+
+    const authDocumento = normalizeOwnerValue(authUser?.persona?.documentoNumero);
+    const rowCedula = normalizeOwnerValue(row.cedula);
+    return Boolean(authDocumento && rowCedula && authDocumento === rowCedula);
+  };
+
+  const visibleRows = isUserRole ? rows.filter(isOwnInspeccion) : rows;
+  const hiddenRowsForUser = isUserRole ? Math.max(0, rows.length - visibleRows.length) : 0;
 
   const stats = {
-    total: rows.length,
-    draft: rows.filter((row) => row.estado === "DRAFT").length,
-    finalized: rows.filter((row) => row.estado === "FINALIZED").length,
+    total: visibleRows.length,
+    draft: visibleRows.filter((row) => row.estado === "DRAFT").length,
+    finalized: visibleRows.filter((row) => row.estado === "FINALIZED").length,
   };
 
   const normalizedConductorFilter = conductorFilter.trim().toLowerCase();
   const normalizedPlacaFilter = placaFilter.trim().toLowerCase();
-  const filteredRows = rows.filter((row) => {
+  const filteredRows = visibleRows.filter((row) => {
     if (fechaFilter && row.fecha.slice(0, 10) !== fechaFilter) {
       return false;
     }
@@ -60,9 +81,8 @@ export default function InspeccionDiariaPage() {
   const currentPage = Math.min(page, totalPages);
   const paginatedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const hasActiveFilters = Boolean(fechaFilter || estadoFilter || conductorFilter || placaFilter);
-  const isUserRole = authUser?.role === "USER";
   const hasTodayInspection = isUserRole
-    ? rows.some((row) => row.createdBy === authUser?.id && row.fecha.slice(0, 10) === getTodayLocalDate())
+    ? visibleRows.some((row) => row.fecha.slice(0, 10) === getTodayLocalDate())
     : false;
   const canCreateInspeccion = isUserRole ? !loading && !hasTodayInspection : true;
 
@@ -149,7 +169,7 @@ export default function InspeccionDiariaPage() {
         </div>
         {!canCreateInspeccion ? (
           <p className="mt-3 text-sm text-amber-700">
-            Ya registraste tu inspeccion del dia. Los usuarios con rol USER solo pueden crear una inspeccion por dia.
+            Ya registraste tu inspeccion del dia. Los usuarios con rol CONDUCTOR solo pueden crear una inspeccion por dia.
           </p>
         ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -244,11 +264,17 @@ export default function InspeccionDiariaPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {isUserRole && hiddenRowsForUser > 0 ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Se ocultaron {hiddenRowsForUser} inspeccion{hiddenRowsForUser === 1 ? "" : "es"} porque los usuarios con rol USER
+            solo pueden consultar sus propias inspecciones.
+          </div>
+        ) : null}
         {loading ? (
           <div className="p-8 text-center text-sm text-slate-500">Cargando inspecciones...</div>
         ) : error ? (
           <div className="p-8 text-center text-sm text-red-600">{error}</div>
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500">No hay inspecciones registradas.</div>
         ) : filteredRows.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500">No hay resultados con los filtros aplicados.</div>
@@ -284,7 +310,11 @@ export default function InspeccionDiariaPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link className="text-sm font-medium text-blue-600 hover:underline" href={`/${tenant}/inspeccion-diaria/${row.id}`}>
+                      <Link
+                        className="text-sm font-medium text-blue-600 hover:underline"
+                        href={`/${tenant}/inspeccion-diaria/${row.id}`}
+                        prefetch={false}
+                      >
                         Abrir
                       </Link>
                     </td>
@@ -327,3 +357,4 @@ export default function InspeccionDiariaPage() {
     </section>
   );
 }
+

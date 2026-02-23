@@ -25,7 +25,7 @@ export class DatabaseService {
                   : false,
                   });
   }
-  async query(text: string, params?: any[]): Promise<any> {
+  async query<T = any>(text: string, params?: any[]): Promise<any> {
     const client = await this.pool.connect();
     try {
       const result = await client.query(text, params);

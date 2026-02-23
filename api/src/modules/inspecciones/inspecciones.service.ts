@@ -60,6 +60,10 @@ export class InspeccionesService {
     return this.hasRole(actor, "ADMIN") || this.hasRole(actor, "SUPER_ADMIN");
   }
 
+  private isUserScoped(actor: Actor) {
+    return this.hasRole(actor, "USER") && !this.isAdminLike(actor);
+  }
+
   private resolveTenant(actor: Actor) {
     if (!actor.tenantId) {
       throw new ForbiddenException("Tenant requerido");
@@ -71,6 +75,55 @@ export class InspeccionesService {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
       throw new BadRequestException(`${fieldName} inválido`);
     }
+  }
+
+  private normalizeIdentityValue(value: string | null | undefined) {
+    return (value ?? "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  }
+
+  private async getUserDocumentoNumero(actor: Actor) {
+    if (!actor.userId || !actor.tenantId) {
+      return null;
+    }
+
+    const result = await this.db.query<{ documento_numero: string | null }>(
+      `
+      SELECT p.documento_numero
+      FROM users u
+      LEFT JOIN personas p ON p.id = u.persona_id
+      WHERE u.id = $1 AND u.tenant_id = $2
+      LIMIT 1
+      `,
+      [actor.userId, actor.tenantId]
+    );
+
+    return result.rows[0]?.documento_numero ?? null;
+  }
+
+  private async ensureUserCanAccessInspection(
+    actor: Actor,
+    diaria: Pick<DiariaRecord, "created_by" | "cedula"> | { createdBy?: string | null; cedula?: string | null }
+  ) {
+    if (!this.isUserScoped(actor)) {
+      return;
+    }
+    if (!actor.userId) {
+      throw new ForbiddenException("Usuario requerido");
+    }
+
+    const createdBy =
+      "created_by" in diaria ? (diaria.created_by ?? null) : (diaria.createdBy ?? null);
+    if (createdBy && createdBy === actor.userId) {
+      return;
+    }
+
+    const userDocumento = this.normalizeIdentityValue(await this.getUserDocumentoNumero(actor));
+    const inspectionCedula = this.normalizeIdentityValue(diaria.cedula ?? null);
+    if (userDocumento && inspectionCedula && userDocumento === inspectionCedula) {
+      return;
+    }
+
+    throw new ForbiddenException("Solo puedes consultar tus propias inspecciones");
   }
 
   private mapInspeccion(
@@ -99,17 +152,25 @@ export class InspeccionesService {
 
   async list(actor: Actor) {
     const tenantId = this.resolveTenant(actor);
+    if (this.isUserScoped(actor) && !actor.userId) {
+      throw new ForbiddenException("Usuario requerido");
+    }
+    const params: unknown[] = [tenantId];
+    const userScopedFilter =
+      this.isUserScoped(actor) && actor.userId
+        ? ` AND created_by = $${params.push(actor.userId)}`
+        : "";
     const result = await this.db.query(
       `
       SELECT id, tenant_id, placa, conductor, cedula, fecha::text, numero_manifiesto,
              destino, estado, punto_critico, hallazgos, acciones_correctivas,
              created_by, created_at::text, updated_at::text
       FROM inspecciones.diarias
-      WHERE tenant_id = $1
+      WHERE tenant_id = $1${userScopedFilter}
       ORDER BY fecha DESC, created_at DESC
       LIMIT 200
       `,
-      [tenantId]
+      params as any[]
     );
     return result.rows;
   }
@@ -156,7 +217,9 @@ export class InspeccionesService {
 
   async getById(id: string, actor: Actor) {
     this.ensureUuid(id, "id");
-    return this.getByIdForTenant(id, this.resolveTenant(actor));
+    const diaria = await this.getByIdForTenant(id, this.resolveTenant(actor));
+    await this.ensureUserCanAccessInspection(actor, diaria);
+    return diaria;
   }
 
   private validatePayload(payload: UpsertInspeccionDiariaDto) {
@@ -292,6 +355,7 @@ export class InspeccionesService {
     this.validatePayload(payload);
     const tenantId = this.resolveTenant(actor);
     const current = await this.getByIdForTenant(id, tenantId);
+    await this.ensureUserCanAccessInspection(actor, current);
     if (current.estado !== "DRAFT" && !(current.estado === "FINALIZED" && this.isAdminLike(actor))) {
       throw new BadRequestException("No se puede editar una inspección finalizada o reportada");
     }
@@ -406,6 +470,7 @@ export class InspeccionesService {
     this.ensureUuid(id, "id");
     const tenantId = this.resolveTenant(actor);
     const current = await this.getByIdForTenant(id, tenantId);
+    await this.ensureUserCanAccessInspection(actor, current);
     if (current.estado !== "DRAFT") {
       throw new BadRequestException("Solo se puede finalizar en estado DRAFT");
     }
@@ -443,6 +508,7 @@ export class InspeccionesService {
     this.ensureUuid(id, "id");
     const tenantId = this.resolveTenant(actor);
     const diaria = await this.getByIdForTenant(id, tenantId);
+    await this.ensureUserCanAccessInspection(actor, diaria);
     if (diaria.estado !== "FINALIZED") {
       throw new BadRequestException("PDF disponible únicamente para inspecciones finalizadas");
     }
