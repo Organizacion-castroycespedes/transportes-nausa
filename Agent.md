@@ -1,227 +1,229 @@
-# Agent.md - TenantCore Platform
+# Agent.md - Transportes NAUSA Platform
 
 ## 1. Resumen del Proyecto
-Proyecto SaaS multi-tenant con backend en NestJS (`apps/api`) y frontend en Next.js (`apps/web`). El core incluye autenticacion JWT, RBAC por roles y permisos de menu, y catalogo de menu por tenant.
+Proyecto SaaS multi-tenant con:
+- Backend en NestJS dentro de `api/`
+- Frontend en Next.js dentro de `web/`
+- Base de datos PostgreSQL
 
-Ejemplos reales:
-- Backend NestJS: `apps/api/src/modules/auth`, `apps/api/src/modules/users`, `apps/api/src/modules/menu`.
-- Frontend Next.js: `apps/web/app/login/page.tsx`, `apps/web/domains/auth/session-manager.ts`.
-- Esquema multi-tenant: tablas `tenants`, `users`, `menu_items`, `role_menu_permissions` en `apps/api/database/initial_schema.sql` y `apps/api/database/2025_03_07_menu_management.sql`.
+El proyecto incluye autenticacion JWT, RBAC por roles/permisos, modulos administrativos y flujos operativos por tenant.
 
-## 2. Arquitectura General
+## 2. Arquitectura General (Estructura Real)
 Diagrama textual (alto nivel):
-```
-[Web Next.js] -> [API NestJS /api] -> [PostgreSQL]
-   app/*            controllers         tablas multi-tenant
-   domains/*        services            (tenants, users, roles, menu)
-   store/*          common/guards
+```txt
+[web/ Next.js] -> [api/ NestJS /api] -> [PostgreSQL]
+  app/*            controllers            tablas multi-tenant
+  domains/*        services               (tenants, users, roles, menu, etc.)
+  components/*     modules/*
+  store/*
 ```
 
-Componentes principales (ejemplos reales):
-- Controllers: `AuthController`, `UsersController`, `MenuAdminController`.
-- Services: `AuthService`, `UsersService`, `MenuService`, `MenuAdminService`.
-- Capa DB: `DatabaseService` y consultas SQL directas.
-- Acceso/Permisos: `PermissionsGuard`, `AccessControlService`.
-
-Separacion por capas (actual):
-- Controllers -> Services -> DB (SQL directo con `pg`).
-- Ejemplo: `apps/api/src/modules/users/users.controller.ts` -> `users.service.ts` -> `DatabaseService`.
+Estructura actual relevante:
+- `web/app` rutas Next.js (App Router)
+- `web/domains` logica por dominio
+- `web/components` UI reutilizable
+- `web/components/design-system` componentes visuales base
+- `web/styles/globals.css` tokens visuales globales (fuente de verdad visual)
+- `api/src/modules` modulos backend NestJS
+- `api/database` SQL/migraciones/seed historicos
 
 ## 3. Convenciones de Nombres
-Carpetas y modulos:
-- Modulos backend por dominio: `auth`, `users`, `roles`, `tenants`, `menu`, `branches`, `locations`.
-- Frontend por dominio: `apps/web/domains/auth`, `apps/web/domains/menu`.
+Backend:
+- Modulos por dominio: `auth`, `users`, `roles`, `tenants`, `menu`, `branches`, `locations`, etc.
+- DTOs: `CreateXDto`, `UpdateXDto`, `XResponseDto`
+- Variables comunes: `tenantId`, `userId`, `roleId`, `permissionId`
 
-Clases/DTOs (ejemplos reales):
-- DTOs: `CreateUserDto`, `UpdateUserDto`, `UpdateProfileDto`, `CreateRoleDto`.
-- Responses: `UserResponseDto` en `apps/api/src/modules/users/dto/user-response.dto`.
+Frontend:
+- Dominios en `web/domains/*`
+- Componentes base reutilizables en `web/components/design-system/*`
+- Componentes de pantalla/feature fuera del design system cuando incluyan logica de negocio
 
-Variables estandar:
-- `tenantId`, `userId`, `roleId`, `permissionId` (usadas en DTOs y servicios).
-- Timestamps DB: `created_at`, `updated_at`, `deleted_at` (ver `initial_schema.sql`).
-
-Endpoints:
-- Prefijo global: `/api` (`apps/api/src/main.ts`).
-- Ejemplos reales: `/api/auth/login`, `/api/auth/me`, `/api/users`, `/api/admin/menu-items`.
-
-Formato de DTOs:
-- `CreateXDto`, `UpdateXDto`, `XResponseDto` (ej.: `CreateUserDto`, `UpdateRoleDto`).
+Base de datos:
+- Campos de auditoria: `created_at`, `updated_at`, `deleted_at`
+- Siempre usar `tenant_id` en tablas multi-tenant cuando aplique
 
 ## 4. Multi-Tenant Strategy
-Estandar actual observado:
-- El `tenant_id` viaja en el JWT (`AuthService.login` incluye `tenant_id`).
-- Frontend usa el claim `tenant_id` para routing (`apps/web/domains/auth/session-manager.ts`).
-- Existe middleware `tenantMiddleware` que lee `x-tenant` o `:tenant`, pero no esta aplicado en la app.
+Estandar observado:
+- `tenant_id` viaja en JWT
+- Frontend consume el tenant desde la sesion/token para routing y requests
+- Existen rutas por tenant en `web/app/[tenant]/...`
 
-Reglas de seguridad obligatorias (recomendadas como estandar oficial):
-1. Para usuarios autenticados, el `tenant_id` se obtiene del JWT (claim `tenant_id`).
-2. Para admin global (SUPER_ADMIN), se permite `tenantId` en query/body solo para operaciones globales.
-3. Toda query debe filtrar por `tenant_id` (ej.: `users.service.ts` usa `users.tenant_id = $1`).
-4. Evitar `tenant_id` enviado manualmente desde frontend si el token ya lo define.
-
-Tenant default:
-- Frontend usa fallback `"default"` si el token no tiene `tenant_id` (ver `buildUserFromToken`).
+Reglas obligatorias:
+1. Para usuarios autenticados, el `tenant_id` debe derivarse del JWT (no del frontend como fuente primaria).
+2. Toda query multi-tenant debe filtrar por `tenant_id`.
+3. Evitar aceptar `tenant_id` enviado manualmente desde UI si el backend ya lo obtiene del token.
+4. Las pantallas en `web/app/[tenant]/...` deben mantener coherencia entre slug en URL y tenant de sesion.
 
 ## 5. RBAC / Permisos
 Modelo actual:
-- Roles por usuario/tenant: tabla `user_roles`.
-- SUPER_ADMIN y ADMIN usados en guards (`@Roles("SUPER_ADMIN", "ADMIN")`).
-- Permisos por menu y nivel READ/WRITE en `role_menu_permissions`.
+- Roles por usuario/tenant (`user_roles`)
+- Roles como `SUPER_ADMIN`, `ADMIN`
+- Permisos por menu y nivel (READ/WRITE) en `role_menu_permissions`
 
-Validacion:
-- `PermissionsGuard` valida permisos por menu (`RequirePermission`).
-- `AccessControlService` centraliza permisos por usuario/tenant.
-
-Ejemplos reales:
-- `UsersController` requiere `MENU_KEYS.CONFIG_USUARIOS`.
-- `MenuAdminController` restringido a SUPER_ADMIN.
+Buenas practicas:
+- Guards en endpoints sensibles
+- Validacion centralizada de permisos por menu
+- No exponer operaciones cross-tenant sin guardas especiales
 
 ## 6. Autenticacion y Sesion
-Estado actual:
-- JWT access token generado en `/api/auth/login` con expiracion `JWT_EXPIRES_IN` (default `1h`).
-- Refresh token se genera pero no se persiste ni existe endpoint `/auth/refresh` en backend.
-- Frontend espera `/auth/refresh` y maneja refresh en `session-manager.ts`.
+Estado general:
+- JWT access token para autenticacion
+- Frontend con manejo de sesion y rehidratacion de perfil/menu
 
-Recomendacion de almacenamiento:
-- Ideal: refresh token en cookie HttpOnly (ver `docs/auth-session.md`).
-- Actual: refresh token en `sessionStorage` (opt-in con `NEXT_PUBLIC_REFRESH_TOKEN_STORAGE=session`).
-
-Flujo real en frontend:
-- Login -> `startSessionFromLogin` -> rehidrata perfil y menu (`/auth/me`, `/me/menu`).
+Recomendaciones:
+- Implementar/estandarizar refresh token seguro (idealmente cookie HttpOnly)
+- No depender de headers manuales para roles/tenant en reemplazo de validacion JWT real
 
 ## 7. Base de Datos
-Motor: PostgreSQL (lib `pg`).
+Motor:
+- PostgreSQL (`pg`)
 
-Esquema principal (ejemplos reales):
-- `tenants`, `users`, `roles`, `user_roles`, `personas`, `tenant_branches`.
-- Menu y permisos: `menu_items`, `role_menu_permissions` (migracion `2025_03_07_menu_management.sql`).
-- Auditoria: `security_audit_logs`.
+Activos relevantes:
+- SQL en `api/database/*`
+- Scripts operativos en `scripts/database/*`
+- Deploy DB remoto en `scripts/ssh/*`
 
-Migraciones:
-- SQL legado en `apps/api/database/*.sql`.
-- Nuevo flujo automatizado en `apps/scripts/database`:
-  - `migrate.sh` (crea DB si no existe + migraciones idempotentes + `migrations_history`).
-  - `seed.sh` (datos generales, roles/permisos y SUPER_ADMIN).
-  - `backup.sh` / `rollback.sh`.
-- Deploy remoto por SSH: `apps/scripts/ssh/deploy-db.sh`.
+## 8. Sistema Visual (PRIORIDAD ALTA)
+Esta seccion es obligatoria para cualquier implementacion en frontend.
 
-Indices recomendados ya presentes:
-- `menu_items_tenant_key_unique`, `role_menu_permissions_unique`.
-- Indices en `tenant_branches`, `personas` y geografia.
+### 8.1 Fuente de Verdad Visual
+La fuente de verdad visual del proyecto es:
+1. `web/styles/globals.css` (tokens globales Tailwind v4 via `@theme inline`)
+2. `web/components/design-system/*` (componentes base reutilizables)
 
-## 8. Estructura Recomendada del Proyecto
-Estructura actual:
-- `apps/api` (NestJS)
-- `apps/web` (Next.js)
-- `apps/docs` (documentacion)
+Regla:
+- Las nuevas pantallas y componentes deben construirse usando los tokens definidos en `web/styles/globals.css` y componiendo `web/components/design-system`.
+- No introducir paletas nuevas hardcodeadas si ya existe token equivalente.
 
-Si se quiere escalar, propuesta:
-```
-apps/
-  api/
-  web/
-packages/
-  shared/
-  types/
-  ui/
-  config/
-database/
-  migrations/
-  seeds/
-docs/
-```
+### 8.2 Tokens Globales Actuales (`web/styles/globals.css`)
+Tokens disponibles (usar estos nombres en clases Tailwind):
+- Colores:
+  - `primary` / `primary-foreground`
+  - `secondary` / `secondary-foreground`
+  - `background` / `foreground`
+  - `muted` / `muted-foreground`
+  - `accent` / `accent-foreground`
+  - `card` / `card-foreground`
+  - `border`
+  - `ring`
+- Radio:
+  - `--radius` (base visual del sistema)
+- Tipografia:
+  - `--font-sans` (Inter + fallback)
 
-Pasos de refactor sugeridos:
-1. Mover migraciones desde `apps/api/database` a `database/migrations`.
-2. Crear `packages/types` para DTOs compartidos (auth/menu/usuarios).
-3. Centralizar config (`eslint`, `tsconfig`, `prettier`) en `packages/config`.
+Aplicacion esperada:
+- Fondos generales: `bg-background`
+- Texto principal: `text-foreground`
+- Cards/containers: `bg-card text-card-foreground border-border`
+- Enfoque/focus: `focus-visible:ring-ring`
+- Inputs: `border-border`, `focus:border-primary`, `focus:ring-ring`
+
+### 8.3 Estructura del Design System (`web/components/design-system`)
+Componentes base actuales:
+- `Button.tsx`
+- `Input.tsx`
+- `Select.tsx`
+- `Textarea.tsx`
+- `Modal.tsx`
+- `Toast.tsx`
+- `SearchFilters.tsx`
+- `TenantListItem.tsx`
+- `theme.ts` (tema legacy / referencia parcial)
+
+Uso recomendado por capas:
+1. `design-system/*`: primitives y componentes visuales reutilizables (sin logica de negocio pesada)
+2. `domains/*`: composicion con estado, fetch, validaciones y reglas del caso de uso
+3. `app/*`: layout/ruta, wiring de pagina, providers
+
+### 8.4 Patrones Visuales que SI deben replicarse
+Patrones correctos ya presentes:
+- Botones con variantes (`primary`, `secondary`, `outline`, `ghost`)
+- Estados de focus/hover con `ring` y transiciones suaves
+- Inputs con label + hint + estado requerido
+- Modales con overlay y card (`bg-card`, `text-card-foreground`)
+- Bordes y sombras suaves (`border-border`, `shadow-sm`, `rounded-lg/xl`)
+
+Reglas de composicion:
+- Preferir `className` extensible sobre duplicar componentes.
+- Mantener naming de variantes (`primary`, `secondary`, `outline`, `ghost`) para consistencia.
+- Reutilizar `Input`, `Select`, `Textarea`, `Button` antes de crear controles custom.
+- Crear nuevos componentes del design system cuando el patron se repita en 2+ pantallas.
+
+### 8.5 Patrones a Evitar (Muy Importante)
+Se detectan inconsistencias actuales en algunos componentes (`Select`, `Textarea`, `Toast`, `TenantListItem`) con colores hardcodeados (`slate-*`, `blue-*`, `emerald-*`, `rose-*`).
+
+Regla para nuevas implementaciones:
+- No usar colores hardcodeados (`text-slate-*`, `border-blue-*`, etc.) cuando exista token del sistema.
+- Si un estado semantico nuevo es necesario (success/error/warning), definir primero token o convencion reutilizable antes de replicar clases directas por componente.
+
+Nota de compatibilidad:
+- Los componentes existentes con hardcode no se consideran referencia visual primaria.
+- La referencia primaria es `globals.css` + componentes ya tokenizados (`Button`, `Input`, `Modal`).
+
+### 8.6 `theme.ts` vs `globals.css` (Aclaracion)
+`web/components/design-system/theme.ts` contiene una paleta distinta (azules/grises) que no coincide con los tokens actuales de `web/styles/globals.css` (rojo/verde/blancos).
+
+Regla oficial:
+- Para nuevas implementaciones, usar `web/styles/globals.css` como fuente de verdad.
+- `theme.ts` debe tratarse como legado o utilitario secundario hasta que se alinee con `globals.css`.
+
+### 8.7 Checklist Visual para Nuevas Implementaciones
+Antes de cerrar una tarea de frontend, validar:
+1. Usa componentes de `web/components/design-system` cuando aplica.
+2. Usa tokens de `web/styles/globals.css` en lugar de colores hardcodeados.
+3. Mantiene `focus-visible` y estados de accesibilidad.
+4. Respeta `rounded-*`, sombras y espaciados coherentes con el sistema actual.
+5. No introduce una variante visual nueva sin documentarla/estandarizarla.
 
 ## 9. Estandares de Desarrollo
-Linting/Formatting:
-- Web: `next lint` configurado.
-- API: sin lint/format scripts.
+General:
+- Commits: Conventional Commits (`feat:`, `fix:`, `chore:`)
+- Branching: `feature/`, `release/`, `hotfix/`
+- PR checklist: lint, pruebas, migraciones, seguridad, impacto visual
 
-Convenciones recomendadas:
-- Commits: Conventional Commits (`feat:`, `fix:`, `chore:`).
-- Branching: `feature/`, `release/`, `hotfix/`.
-- PR checklist: tests, lint, migraciones, seguridad.
-- Definition of Done: tests pasados, endpoints con guardas, migracion aplicada.
+Frontend:
+- Priorizar reutilizacion del design system
+- Mantener consistencia con tokens globales
+- Evitar UI ad hoc por pagina si el patron puede ser reusable
 
-## 10. Scripts de Arranque (Runbook)
-Backend (`apps/api`):
+Backend:
+- Validacion de DTOs
+- Guards en endpoints sensibles
+- Filtrado por tenant en servicios
+
+## 10. Runbook de Arranque
+Backend (`api/`):
 - Instalar: `npm install`
 - Dev: `npm run start:dev`
 - Build: `npm run build`
-- Start prod: `npm run start`
+- Start: `npm run start`
 
-Frontend (`apps/web`):
+Frontend (`web/`):
 - Instalar: `npm install`
 - Dev: `npm run dev`
 - Build: `npm run build`
-- Start prod: `npm run start`
+- Start: `npm run start`
 - Lint: `npm run lint`
 
-Migraciones:
-- Script disponible: `scripts/database/migrate.sh`.
-- Ejecuta SQL versionados en `scripts/database/00x_*.sql`.
-- Crea base automaticamente si no existe (requiere `DB_ADMIN_USER`/`DB_ADMIN_PASSWORD` o usuario con `CREATEDB`).
+Migraciones / seeds:
+- Ver `scripts/database/*`
+- Ver `docs/database-runbook.md`
 
-Seeds:
-- Script disponible: `scripts/database/seed.sh`.
-- Orden actual:
-  - `005_seed_general_data.sql` (paises, departamentos, municipios, tenants, tenants_detalles, tenant_branches, personas).
-  - `006_seed_menu_items.sql` (menu inicial).
-  - `003_seed_roles.sql`.
-  - `007_seed_role_menu_permissions.sql`.
-  - `004_seed_super_admin.sql`.
+## 11. Riesgos y Mejoras Prioritarias
+Tecnico/seguridad:
+- Validacion JWT/guards inconsistentes (revisar endpoints)
+- Refresh token y rotacion pendientes de robustecer
+- Validacion global DTOs y headers de seguridad por reforzar
 
-## 11. Checklist de Seguridad
-- CORS: configurado en `main.ts` pero con origen unico (falta lista/regex).
-- JWT: `JWT_SECRET` tiene default `changeme` (riesgo si falta env).
-- Refresh token: falta endpoint `/auth/refresh` y persistencia segura.
-- Rate limiting: no se encontro.
-- Headers de seguridad (CSP, HSTS): no se encontraron.
-- Validacion DTOs (class-validator): no se encontro en API.
-- Guards: `JwtAuthGuard` no valida JWT (usa headers `x-user-role/x-tenant-id`).
-- Logging/auditoria: solo `security_audit_logs` para menu, no global.
+Frontend visual:
+- Alinear componentes legacy de `design-system` a tokens (`Select`, `Textarea`, `Toast`, `TenantListItem`)
+- Unificar `theme.ts` con `globals.css` o deprecarlos explicitamente
+- Documentar nuevas variantes semanticas antes de adoptarlas en masa
 
-## 12. Roadmap Tecnico (MVP -> Escalable)
-- v0: auth + tenant + roles + users (ya parcial).
-- v1: permisos dinamicos + menu dinamico (parcial en `menu_admin`).
-- v2: auditoria + logs + multi-empresa + multi-sucursal (auditoria parcial).
-- v3: metricas + colas + cache (pendiente).
+## 12. Regla de Oro para Nuevas Features Web
+Si una implementacion nueva necesita UI:
+1. Revisar primero `web/components/design-system`
+2. Reutilizar y extender componentes existentes
+3. Aplicar tokens de `web/styles/globals.css`
+4. Solo despues crear estilos nuevos, manteniendolos compatibles con el sistema visual actual
 
-## Diagnostico (Estado Actual)
-Que esta bien:
-- Separacion clara de modulos en API (`modules/*`).
-- SQL multi-tenant con filtros en `users.service.ts`.
-- Menu RBAC con cache y auditoria (`menu-admin.service.ts`).
-
-Que se puede mejorar:
-- Unificar estrategia de tenant (JWT vs headers vs middleware no usado).
-- Agregar DTO validation global en NestJS.
-- Integrar `scripts/database/*.sh` en pipeline CI/CD (staging/prod) con gates de aprobacion.
-
-Riesgos tecnicos y de seguridad:
-- `JwtAuthGuard` no valida JWT (permite falsificar roles/tenant via headers).
-- Endpoints sin guardas (ej.: `tenants`, `permissions`, `locations`).
-- Refresh token sin persistencia ni rotacion (frontend depende de `/auth/refresh`).
-- Secretos hardcodeados y `.env` en repo.
-
-## 13. Runbook DB Multi-OS
-
-Referencia principal:
-- `docs/database-runbook.md`
-
-Resumen operativo:
-1. Crear `scripts/config/db.env` desde `scripts/config/db.env.example`.
-2. Definir `DB_*` y `DB_ADMIN_*` para creacion automatica de base.
-3. Ejecutar migracion:
-   - Windows (Git Bash): `bash scripts/database/migrate.sh scripts/config/db.env`
-   - Linux/macOS: `./scripts/database/migrate.sh scripts/config/db.env`
-4. Ejecutar seed:
-   - Windows: `bash scripts/database/seed.sh scripts/config/db.env`
-   - Linux/macOS: `./scripts/database/seed.sh scripts/config/db.env`
-5. Deploy remoto SSH:
-   - Windows: `bash scripts/ssh/deploy-db.sh scripts/config/db.env`
-   - Linux/macOS: `./scripts/ssh/deploy-db.sh scripts/config/db.env`
