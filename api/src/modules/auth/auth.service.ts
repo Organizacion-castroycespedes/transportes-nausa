@@ -10,6 +10,7 @@ import {
   InternalServerErrorException,
   UnauthorizedException,
 } from "@nestjs/common";
+import type { PoolClient } from "pg";
 import { DatabaseService } from "../../common/db/database.service";
 import type { LoginDto } from "./dto/login.dto";
 import type { ForgotPasswordDto } from "./dto/forgot-password.dto";
@@ -462,7 +463,7 @@ export class AuthService {
   }
 
   private async validateRefreshToken(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     refreshToken: string
   ): Promise<RefreshTokenRecord> {
     const tokenHash = this.hashRefreshToken(refreshToken);
@@ -529,7 +530,7 @@ export class AuthService {
   }
 
   private async fetchUserRoles(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     userId: string,
     tenantId: string
   ): Promise<string[]> {
@@ -544,8 +545,8 @@ export class AuthService {
       [userId, tenantId]
     );
     return (roles.rows ?? [])
-      .map((row) => row.nombre)
-      .filter((role) => Boolean(role));
+      .map((row: { nombre: string }) => row.nombre)
+      .filter((role: string) => Boolean(role));
   }
 
   private async persistRefreshToken(
@@ -568,7 +569,7 @@ export class AuthService {
   }
 
   private async insertRefreshToken(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     userId: string,
     tenantId: string,
     refreshToken: string,
@@ -595,7 +596,7 @@ export class AuthService {
   }
 
   private async rotateRefreshToken(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     record: Pick<RefreshTokenRecord, "id" | "user_id" | "tenant_id">,
     metadata?: RefreshTokenMetadata
   ) {
@@ -646,7 +647,7 @@ export class AuthService {
   }
 
   private async findActiveSession(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     userId: string,
     tenantId: string
   ): Promise<AuthSessionRecord | null> {
@@ -663,7 +664,7 @@ export class AuthService {
   }
 
   private async createSession(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     userId: string,
     tenantId: string,
     refreshToken: string,
@@ -695,7 +696,7 @@ export class AuthService {
   }
 
   private async invalidateActiveSessions(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     userId: string,
     tenantId: string
   ) {
@@ -709,7 +710,7 @@ export class AuthService {
       [userId, tenantId]
     );
     const tokenHashes = (sessions.rows ?? [])
-      .map((row) => row.refresh_token)
+      .map((row: { refresh_token: string }) => row.refresh_token)
       .filter(Boolean);
     if (tokenHashes.length === 0) {
       return;
@@ -725,7 +726,7 @@ export class AuthService {
   }
 
   private async validateSessionForRefresh(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     record: RefreshTokenRecord,
     refreshTokenHash: string
   ): Promise<AuthSessionRecord> {
@@ -746,7 +747,7 @@ export class AuthService {
   }
 
   private async updateSessionAfterRefresh(
-    client: { query: (text: string, params?: any[]) => Promise<any> },
+    client: PoolClient,
     sessionId: string,
     refreshTokenHash: string,
     metadata?: RefreshTokenMetadata

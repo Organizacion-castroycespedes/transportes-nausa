@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AuditService } from "../../common/services/audit.service";
+import { CacheService } from "../../common/services/cache.service";
 import { MenuAdminService } from "./menu-admin.service";
 
 class FakeDatabaseService {
@@ -38,7 +40,15 @@ test("MenuAdminService: replaceRolePermissions uses transaction", async () => {
     release: () => undefined,
   };
 
-  const service = new MenuAdminService(new FakeDatabaseService(client) as never);
+  const auditService = { logEvent: () => undefined } as unknown as AuditService;
+  const cacheService = {
+    invalidateTenantNamespace: () => undefined,
+  } as unknown as CacheService;
+  const service = new MenuAdminService(
+    new FakeDatabaseService(client) as never,
+    auditService,
+    cacheService
+  );
 
   const result = await service.replaceRolePermissions(
     "role-1",
