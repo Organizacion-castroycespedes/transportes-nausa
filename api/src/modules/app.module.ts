@@ -11,9 +11,14 @@ import { MenuModule } from "./menu/menu.module";
 import { DriversModule } from "./drivers/drivers.module";
 import { InspeccionesModule } from "./inspecciones/inspecciones.module";
 import { ReportsModule } from "./reports/reports.module";
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env', // SOLO para local
+    }),
     ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
