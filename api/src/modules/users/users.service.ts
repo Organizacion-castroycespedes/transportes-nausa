@@ -205,7 +205,7 @@ export class UsersService {
       params
     );
 
-    return result.rows.map((row) => this.mapUserResponse(row));
+    return result.rows.map((row: UserRecord) => this.mapUserResponse(row));
   }
 
   async getUser(userId: string, actor: ActorContext) {

@@ -37,12 +37,22 @@ export class MenuAdminController {
     @Inject(MenuAdminService) private readonly menuAdminService: MenuAdminService
   ) {}
 
+  private getRequestUser(request: Request): {
+    id?: string;
+    tenantId?: string;
+    roles?: string[];
+  } | null {
+    return (request as Request & { user?: { id?: string; tenantId?: string; roles?: string[] } })
+      .user ?? null;
+  }
+
   private buildActor(request: Request) {
-    const roles = Array.isArray(request.user?.roles) ? request.user.roles : [];
+    const user = this.getRequestUser(request);
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
     return {
       roles,
-      tenantId: request.user?.tenantId,
-      userId: request.user?.id,
+      tenantId: user?.tenantId,
+      userId: user?.id,
       ip: request.headers["x-forwarded-for"]?.toString() ?? request.ip,
       userAgent: request.headers["user-agent"],
     };
