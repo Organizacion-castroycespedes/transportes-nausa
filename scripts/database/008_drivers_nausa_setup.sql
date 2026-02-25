@@ -434,4 +434,105 @@ DO UPDATE SET
   access_level = EXCLUDED.access_level,
   actions = EXCLUDED.actions;
 
+
+WITH tenant_target AS (
+  SELECT id
+  FROM public.tenants
+  WHERE slug = 'transportes-nausa'
+  LIMIT 1
+),
+report_parent AS (
+  SELECT
+    t.id AS tenant_id,
+    (
+      SELECT mi.id
+      FROM public.menu_items mi
+      WHERE mi.tenant_id = t.id
+        AND mi.deleted_at IS NULL
+        AND mi.key IN ('REPORTES_TENANT_REPORTES', 'REPORTE_TENANT_REPORTE')
+      ORDER BY CASE mi.key
+        WHEN 'REPORTES_TENANT_REPORTES' THEN 1
+        WHEN 'REPORTE_TENANT_REPORTE' THEN 2
+        ELSE 99
+      END
+      LIMIT 1
+    ) AS parent_id
+  FROM tenant_target t
+)
+INSERT INTO public.menu_items (
+  tenant_id,
+  key,
+  module,
+  label,
+  route,
+  icon,
+  parent_id,
+  sort_order,
+  visible,
+  below_main_menu,
+  metadata
+)
+SELECT
+  t.id,
+  x.key,
+  x.module,
+  x.label,
+  x.route,
+  x.icon,
+  rp.parent_id,
+  x.sort_order,
+  true,
+  false,
+  '{}'::jsonb
+FROM tenant_target t
+LEFT JOIN report_parent rp ON rp.tenant_id = t.id
+JOIN LATERAL (
+  VALUES
+    ('REPORTE_DASHBOARD', 'reporte', 'Inspecciones Dashboard', '/{tenant}/reporte-deshboard', 'LayoutDashboard', 0),
+    ('REPORTE_INSPENCCIONES', 'reportes', 'Reportes Inspecciones', '/{tenant}/reporte-inspecciones', 'FileText', 1)
+) AS x(key, module, label, route, icon, sort_order) ON true
+ON CONFLICT (tenant_id, key) WHERE deleted_at IS NULL
+DO UPDATE SET
+  module = EXCLUDED.module,
+  label = EXCLUDED.label,
+  route = EXCLUDED.route,
+  icon = EXCLUDED.icon,
+  parent_id = EXCLUDED.parent_id,
+  sort_order = EXCLUDED.sort_order,
+  visible = EXCLUDED.visible,
+  below_main_menu = EXCLUDED.below_main_menu,
+  metadata = EXCLUDED.metadata,
+  updated_at = now(),
+  deleted_at = NULL;
+
+WITH tenant_target AS (
+  SELECT id
+  FROM public.tenants
+  WHERE slug = 'transportes-nausa'
+  LIMIT 1
+)
+INSERT INTO public.role_menu_permissions (
+  tenant_id,
+  role_id,
+  menu_item_id,
+  access_level,
+  actions
+)
+SELECT
+  t.id,
+  r.id,
+  mi.id,
+  'WRITE',
+  jsonb_build_object('read', true, 'write', true)
+FROM tenant_target t
+JOIN public.roles r ON r.nombre = 'SUPER_ADMIN'
+JOIN public.menu_items mi
+  ON mi.tenant_id = t.id
+ AND mi.key IN ('REPORTE_DASHBOARD', 'REPORTE_INSPENCCIONES')
+ AND mi.deleted_at IS NULL
+ON CONFLICT (tenant_id, role_id, menu_item_id)
+DO UPDATE SET
+  access_level = EXCLUDED.access_level,
+  actions = EXCLUDED.actions;
+
 COMMIT;

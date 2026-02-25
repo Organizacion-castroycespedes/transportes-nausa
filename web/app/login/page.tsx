@@ -40,7 +40,15 @@ const LoginPageContent = () => {
   const dispatch = useAppDispatch();
   const authStatus = useAppSelector((state) => state.auth.authStatus);
   const tenantId = useAppSelector((state) => state.auth.tenantId);
+  const authUserRole = useAppSelector((state) => state.auth.user?.role);
   useAutoClearState(status, setStatus, 12000);
+
+  const getPostLoginRoute = useCallback((tenant: string, role?: string | null) => {
+    if (role === "USER") {
+      return `/${tenant}/inspeccion-diaria`;
+    }
+    return `/${tenant}/dashboard`;
+  }, []);
 
   const setStatusMessage = (message: string, variant: ToastVariant) => {
     setStatus({ message, variant });
@@ -68,8 +76,8 @@ const LoginPageContent = () => {
     }
     const targetTenant = tenantId ?? "default";
     setStatusWarning("Ya existe una sesión activa en este navegador.");
-    router.replace(`/${targetTenant}/dashboard`);
-  }, [authStatus, router, tenantId]);
+    router.replace(getPostLoginRoute(targetTenant, authUserRole));
+  }, [authStatus, authUserRole, getPostLoginRoute, router, tenantId]);
 
   const handleSocialLogin = (provider: "google" | "facebook") => {
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
@@ -106,12 +114,13 @@ const LoginPageContent = () => {
       const tokens = await login({ email, password });
       const tokenPayload = decodeTokenPayload(tokens.accessToken);
       const tenantSlug = tokenPayload?.tenant_id ?? "default";
+      const userRole = tokenPayload?.roles?.[0] ?? null;
       await startSessionFromLogin(tokens, {
         fallbackEmail: email,
         persistRefresh: rememberMe && hasRefreshTokenStorage(),
       });
       setStatusSuccess("Inicio de sesión exitoso. Redirigiendo...");
-      router.push(`/${tenantSlug}/dashboard`);
+      router.push(getPostLoginRoute(tenantSlug, userRole));
     } catch (requestError) {
       if (
         requestError instanceof ApiError &&
@@ -143,6 +152,7 @@ const LoginPageContent = () => {
       const tokens = await forceLogin(pendingCredentials);
       const tokenPayload = decodeTokenPayload(tokens.accessToken);
       const tenantSlug = tokenPayload?.tenant_id ?? "default";
+      const userRole = tokenPayload?.roles?.[0] ?? null;
       await startSessionFromLogin(tokens, {
         fallbackEmail: pendingCredentials.email,
         persistRefresh: rememberMe && hasRefreshTokenStorage(),
@@ -150,14 +160,14 @@ const LoginPageContent = () => {
       setShowSessionConflict(false);
       setPendingCredentials(null);
       setStatusSuccess("Sesión anterior cerrada. Redirigiendo...");
-      router.push(`/${tenantSlug}/dashboard`);
+      router.push(getPostLoginRoute(tenantSlug, userRole));
     } catch {
       dispatch(setAuthStatus("error"));
       setStatusError("No fue posible iniciar sesión. Intenta nuevamente.");
     } finally {
       setIsSubmitting(false);
     }
-  }, [dispatch, pendingCredentials, rememberMe, router]);
+  }, [dispatch, getPostLoginRoute, pendingCredentials, rememberMe, router]);
 
   const handleCancelForceLogin = useCallback(() => {
     setShowSessionConflict(false);
