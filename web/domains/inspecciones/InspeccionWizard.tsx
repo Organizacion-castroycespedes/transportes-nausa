@@ -320,25 +320,49 @@ export function InspeccionWizard({ initial, canEditFinalized = false, onSave }: 
         </div>
       )}
 
-      {grouped[section]?.map((item) => {
-        const answer = form.respuestas.find((r) => r.itemId === item.id);
-        return (
-          <div key={item.id} className="rounded-xl border p-3">
-            <p className="text-sm font-medium">{item.descripcion}</p>
-            <div className="mt-2 flex gap-3 text-sm">
-              {(["SI", "NO", "NA"] as const).map((opt) => (
-                <label key={opt} className="flex items-center gap-1">
-                  <input type="radio" checked={answer?.respuesta === opt} disabled={editingBlocked} onChange={() => setAnswer(item.id, opt)} /> {opt}
-                </label>
-              ))}
-            </div>
-            {answer?.respuesta === "NO" && (
-              <textarea className="mt-2 w-full rounded-lg border p-2 disabled:cursor-not-allowed disabled:bg-slate-100" placeholder="Observación obligatoria" value={answer.observacion ?? ""} disabled={editingBlocked} onChange={(e) => setObs(item.id, e.target.value)} />
-            )}
-          </div>
-        );
-      })}
-
+      {grouped[section]?.length ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {grouped[section].map((item) => {
+            const answer = form.respuestas.find((r) => r.itemId === item.id);
+            return (
+              <div key={item.id} className="rounded-xl border p-3">
+                <p className="text-sm font-medium">{item.descripcion}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                  {(["SI", "NO", "NA"] as const).map((opt) => {
+                    const checked = answer?.respuesta === opt;
+                    return (
+                      <label
+                        key={opt}
+                        className={`flex items-center justify-center rounded-lg border px-2 py-2 text-center ${
+                          checked ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"
+                        } ${editingBlocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
+                      >
+                        <input
+                          type="radio"
+                          className="sr-only"
+                          checked={checked}
+                          disabled={editingBlocked}
+                          onChange={() => setAnswer(item.id, opt)}
+                        />
+                        {opt}
+                      </label>
+                    );
+                  })}
+                </div>
+                {answer?.respuesta === "NO" && (
+                  <textarea
+                    className="mt-2 w-full rounded-lg border p-2 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    placeholder="Observación obligatoria"
+                    value={answer.observacion ?? ""}
+                    disabled={editingBlocked}
+                    onChange={(e) => setObs(item.id, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
       {section === "Hallazgos" && (
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.puntoCritico} disabled={editingBlocked} onChange={(e) => setForm({ ...form, puntoCritico: e.target.checked })} /> Punto crítico</label>
