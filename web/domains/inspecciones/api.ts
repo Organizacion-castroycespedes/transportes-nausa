@@ -1,4 +1,5 @@
 import { apiClient } from "../../lib/http";
+import { ApiError, requestRaw } from "../../lib/request";
 import { store } from "../../store";
 import type { InspeccionDiaria, InspeccionItem, UpsertInspeccionDiariaPayload } from "./types";
 import { publishInspeccionEvent } from "./events";
@@ -74,3 +75,30 @@ export const finalizeInspeccion = (id: string, headers?: HeadersInit) =>
     publishInspeccionEvent("finalized", finalized);
     return finalized;
   });
+
+export const downloadInspeccionPdf = async (id: string) => {
+  const response = await requestRaw(`${INSPECCIONES_ROUTES.diarias}/${id}/pdf`, {
+    method: "GET",
+    credentials: "include",
+    headers: buildInspeccionesHeaders({ Accept: "application/pdf" }),
+  });
+
+  if (!response.ok) {
+    let message = "No fue posible descargar el PDF.";
+    try {
+      const payload = await response.json();
+      if (typeof payload?.message === "string" && payload.message.trim()) {
+        message = payload.message;
+      }
+    } catch {
+      // ignore parse error
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: `inspeccion-diaria-${id}.pdf`,
+  };
+};
