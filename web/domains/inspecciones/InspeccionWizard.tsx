@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { finalizeInspeccion, listInspeccionItems } from "./api";
+import { downloadInspeccionPdf, finalizeInspeccion, listInspeccionItems } from "./api";
 import type { InspeccionDiaria, InspeccionItem, UpsertInspeccionDiariaPayload } from "./types";
 import { ApiError } from "../../lib/request";
 import { Toast, type ToastVariant } from "../../components/design-system/Toast";
@@ -35,6 +35,7 @@ export function InspeccionWizard({ initial, canEditFinalized = false, onSave }: 
   const [actionError, setActionError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [current, setCurrent] = useState<InspeccionDiaria | null>(initial ?? null);
   const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null);
   const [driverContext, setDriverContext] = useState<DriverResponse | null>(null);
@@ -252,6 +253,33 @@ export function InspeccionWizard({ initial, canEditFinalized = false, onSave }: 
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!current?.id) return;
+    setActionError(null);
+    setDownloadingPdf(true);
+    try {
+      const { blob, filename } = await downloadInspeccionPdf(current.id);
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      setToast({ message: "PDF descargado correctamente.", variant: "success" });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setActionError(`${err.message} (${err.status})`);
+      } else {
+        setActionError("No fue posible descargar el PDF.");
+      }
+      setToast({ message: "No fue posible descargar el PDF.", variant: "error" });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       {toast ? <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} /> : null}
@@ -359,7 +387,14 @@ export function InspeccionWizard({ initial, canEditFinalized = false, onSave }: 
           </>
         ) : null}
         {current?.id && isFinalized && (
-          <a className="rounded-lg border px-4 py-2 text-sm" href={`${process.env.NEXT_PUBLIC_API_URL}/inspecciones/diarias/${current.id}/pdf`} target="_blank">Descargar PDF</a>
+          <button
+            type="button"
+            className="rounded-lg border px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => void handleDownloadPdf()}
+            disabled={downloadingPdf}
+          >
+            {downloadingPdf ? "Descargando PDF..." : "Descargar PDF"}
+          </button>
         )}
       </div>
     </div>
