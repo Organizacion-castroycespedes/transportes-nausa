@@ -437,6 +437,53 @@ export class InspeccionesService {
     return seccion.replace(/_/g, " ").trim();
   }
 
+  private async launchPdfBrowser(puppeteer: any) {
+    const args = ["--no-sandbox", "--disable-setuid-sandbox"];
+    const candidatePaths = new Set<string>();
+    const addCandidate = (value: unknown) => {
+      if (typeof value !== "string") return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (fs.existsSync(trimmed)) {
+        candidatePaths.add(trimmed);
+      }
+    };
+
+    addCandidate(process.env.PUPPETEER_EXECUTABLE_PATH);
+    addCandidate(process.env.CHROME_BIN);
+    addCandidate(process.env.CHROME_PATH);
+
+    try {
+      if (typeof puppeteer?.executablePath === "function") {
+        addCandidate(puppeteer.executablePath());
+      }
+    } catch {
+      // Ignore and continue with environment/system candidates.
+    }
+
+    addCandidate("/usr/bin/google-chrome");
+    addCandidate("/usr/bin/google-chrome-stable");
+    addCandidate("/usr/bin/chromium-browser");
+    addCandidate("/usr/bin/chromium");
+
+    for (const executablePath of candidatePaths) {
+      try {
+        return await puppeteer.launch({
+          headless: true,
+          args,
+          executablePath,
+        });
+      } catch {
+        // Try next candidate.
+      }
+    }
+
+    return puppeteer.launch({
+      headless: true,
+      args,
+    });
+  }
+
   private sortItemsForPdf(items: InspeccionItemDto[]) {
     const sectionOrder = new Map<string, number>([
       ["CABINA", 1],
@@ -1483,10 +1530,7 @@ export class InspeccionesService {
       "return import('puppeteer')"
     ) as () => Promise<any>;
     const puppeteer = await importPuppeteer();
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    const browser = await this.launchPdfBrowser(puppeteer);
 
     try {
       const page = await browser.newPage();
