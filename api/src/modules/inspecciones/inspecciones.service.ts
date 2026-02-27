@@ -4,7 +4,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
 } from "@nestjs/common";
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import PDFDocument from "pdfkit";
@@ -16,7 +18,7 @@ import type {
   UpsertInspeccionDiariaDto,
 } from "./dto/inspeccion-diaria.dto";
 
-type Actor = {
+export type Actor = {
   userId?: string;
   tenantId?: string;
   roles: string[];
@@ -52,8 +54,24 @@ type ItemRecord = {
 };
 
 @Injectable()
-export class InspeccionesService {
+export class InspeccionesService implements OnModuleDestroy {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
+  private readonly pdfNavigationTimeoutMs = 15_000;
+  private readonly pdfRenderTimeoutMs = 20_000;
+  private readonly pdfWaitForReadyTimeoutMs = 8_000;
+  private browserPromise: Promise<any> | null = null;
+
+  async onModuleDestroy() {
+    if (!this.browserPromise) return;
+    try {
+      const browser = await this.browserPromise;
+      await browser.close();
+    } catch {
+      // Ignore close errors during shutdown.
+    } finally {
+      this.browserPromise = null;
+    }
+  }
 
   private hasRole(actor: Actor, role: string) {
     return actor.roles.includes(role);
@@ -437,50 +455,179 @@ export class InspeccionesService {
     return seccion.replace(/_/g, " ").trim();
   }
 
-  private async launchPdfBrowser(puppeteer: any) {
-    const args = ["--no-sandbox", "--disable-setuid-sandbox"];
-    const candidatePaths = new Set<string>();
-    const addCandidate = (value: unknown) => {
-      if (typeof value !== "string") return;
-      const trimmed = value.trim();
-      if (!trimmed) return;
-      if (fs.existsSync(trimmed)) {
-        candidatePaths.add(trimmed);
-      }
-    };
+  private resolvePuppeteerCacheDir() {
+    const configured = process.env.PUPPETEER_CACHE_DIR?.trim();
+    const cacheDir = configured
+      ? path.isAbsolute(configured)
+        ? configured
+        : path.resolve(process.cwd(), configured)
+      : path.resolve(process.cwd(), ".cache", "puppeteer");
 
-    addCandidate(process.env.PUPPETEER_EXECUTABLE_PATH);
-    addCandidate(process.env.CHROME_BIN);
-    addCandidate(process.env.CHROME_PATH);
+    process.env.PUPPETEER_CACHE_DIR = cacheDir;
+    return cacheDir;
+  }
+
+  private addChromeExecutableFromCache(cacheDir: string, addCandidate: (value: unknown) => void) {
+    const chromeRoot = path.join(cacheDir, "chrome");
+    if (!fs.existsSync(chromeRoot)) {
+      return;
+    }
 
     try {
-      if (typeof puppeteer?.executablePath === "function") {
-        addCandidate(puppeteer.executablePath());
+      const versions = fs
+        .readdirSync(chromeRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }));
+
+      for (const version of versions) {
+        addCandidate(path.join(chromeRoot, version, "chrome-linux64", "chrome"));
+        addCandidate(path.join(chromeRoot, version, "chrome-win64", "chrome.exe"));
+        addCandidate(path.join(chromeRoot, version, "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium"));
       }
     } catch {
-      // Ignore and continue with environment/system candidates.
+      // Ignore cache read errors and continue with other candidates.
     }
+  }
 
-    addCandidate("/usr/bin/google-chrome");
-    addCandidate("/usr/bin/google-chrome-stable");
-    addCandidate("/usr/bin/chromium-browser");
-    addCandidate("/usr/bin/chromium");
+  private isChromeMissingError(error: unknown) {
+    const message =
+      typeof error === "object" && error && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : String(error ?? "");
+    return message.includes("Could not find Chrome");
+  }
 
-    for (const executablePath of candidatePaths) {
+  private async installChromeForPuppeteer(cacheDir: string) {
+    const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        npxCommand,
+        ["puppeteer", "browsers", "install", "chrome", "--path", cacheDir],
+        {
+          stdio: "ignore",
+          shell: false,
+          env: process.env,
+        }
+      );
+
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Chrome install failed with exit code ${code ?? "unknown"}`));
+      });
+    });
+  }
+
+  private async launchPdfBrowser(puppeteer: any) {
+    const cacheDir = this.resolvePuppeteerCacheDir();
+    const args = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"];
+    const tryLaunch = async () => {
+      const candidatePaths = new Set<string>();
+      const addCandidate = (value: unknown) => {
+        if (typeof value !== "string") return;
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        if (fs.existsSync(trimmed)) {
+          candidatePaths.add(trimmed);
+        }
+      };
+
+      addCandidate(process.env.PUPPETEER_EXECUTABLE_PATH);
+      addCandidate(process.env.CHROME_BIN);
+      addCandidate(process.env.CHROME_PATH);
+      this.addChromeExecutableFromCache(cacheDir, addCandidate);
+
       try {
-        return await puppeteer.launch({
-          headless: true,
-          args,
-          executablePath,
-        });
+        if (typeof puppeteer?.executablePath === "function") {
+          addCandidate(puppeteer.executablePath());
+        }
       } catch {
-        // Try next candidate.
+        // Ignore and continue with environment/system candidates.
       }
+
+      addCandidate("/usr/bin/google-chrome");
+      addCandidate("/usr/bin/google-chrome-stable");
+      addCandidate("/usr/bin/chromium-browser");
+      addCandidate("/usr/bin/chromium");
+
+      for (const executablePath of candidatePaths) {
+        try {
+          return await puppeteer.launch({
+            headless: true,
+            args,
+            executablePath,
+          });
+        } catch {
+          // Try next candidate.
+        }
+      }
+
+      return puppeteer.launch({
+        headless: true,
+        args,
+      });
+    };
+
+    try {
+      return await tryLaunch();
+    } catch (error) {
+      if (!this.isChromeMissingError(error)) {
+        throw error;
+      }
+      await this.installChromeForPuppeteer(cacheDir);
+      return await tryLaunch();
+    }
+  }
+
+  private async getOrCreatePdfBrowser() {
+    if (this.browserPromise) {
+      return this.browserPromise;
     }
 
-    return puppeteer.launch({
-      headless: true,
-      args,
+    const importPuppeteer = new Function(
+      "return import('puppeteer')"
+    ) as () => Promise<any>;
+
+    this.browserPromise = (async () => {
+      const puppeteer = await importPuppeteer();
+      return this.launchPdfBrowser(puppeteer);
+    })();
+
+    try {
+      return await this.browserPromise;
+    } catch (error) {
+      this.browserPromise = null;
+      throw error;
+    }
+  }
+
+  private async configurePdfPage(page: any) {
+    page.setDefaultNavigationTimeout(this.pdfNavigationTimeoutMs);
+    page.setDefaultTimeout(this.pdfRenderTimeoutMs);
+    await page.setJavaScriptEnabled(false);
+    await page.setRequestInterception(true);
+    page.on("request", (request: any) => {
+      const url = String(request.url() ?? "");
+      const resourceType = String(request.resourceType() ?? "");
+      const isDataUri = url.startsWith("data:");
+      const isAboutBlank = url === "about:blank";
+      const isExternalUrl = /^(https?|wss?|ftp):\/\//i.test(url);
+      const isBlockableType =
+        resourceType === "image" ||
+        resourceType === "media" ||
+        resourceType === "font" ||
+        resourceType === "stylesheet";
+
+      if (isExternalUrl || (isBlockableType && !isDataUri && !isAboutBlank)) {
+        request.abort("blockedbyclient").catch(() => undefined);
+        return;
+      }
+
+      request.continue().catch(() => undefined);
     });
   }
 
@@ -1448,6 +1595,7 @@ export class InspeccionesService {
             body.compact .critical-card,
             body.compact .note-card { min-height: 56px; }
             body.compact .note-body { min-height: 36px; }
+            .pdf-ready { display: none; }
           </style>
         </head>
         <body class="${compactModeClass}">
@@ -1522,20 +1670,26 @@ export class InspeccionesService {
               </section>
             </div>
           </div>
+          <div class="pdf-ready" data-ready="true"></div>
         </body>
       </html>
     `;
 
-    const importPuppeteer = new Function(
-      "return import('puppeteer')"
-    ) as () => Promise<any>;
-    const puppeteer = await importPuppeteer();
-    const browser = await this.launchPdfBrowser(puppeteer);
+    this.resolvePuppeteerCacheDir();
+    const browser = await this.getOrCreatePdfBrowser();
+    const page = await browser.newPage();
 
     try {
-      const page = await browser.newPage();
+      await this.configurePdfPage(page);
       await page.setViewport({ width: 1400, height: 900, deviceScaleFactor: 1 });
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      await page.emulateMediaType("print");
+      await page.setContent(html, {
+        waitUntil: "domcontentloaded",
+        timeout: this.pdfRenderTimeoutMs,
+      });
+      await page.waitForSelector(".pdf-ready[data-ready='true']", {
+        timeout: this.pdfWaitForReadyTimeoutMs,
+      });
       const pdf = await page.pdf({
         format: "letter",
         landscape: true,
@@ -1550,8 +1704,16 @@ export class InspeccionesService {
         },
       });
       return Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf);
+    } catch (error) {
+      this.browserPromise = null;
+      try {
+        await browser.close();
+      } catch {
+        // Ignore close errors after render failure.
+      }
+      throw error;
     } finally {
-      await browser.close();
+      await page.close().catch(() => undefined);
     }
   }
 

@@ -18,12 +18,16 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import type { UpsertInspeccionDiariaDto } from "./dto/inspeccion-diaria.dto";
+import { InspeccionesPdfQueueService } from "./inspecciones-pdf-queue.service";
 import { InspeccionesService } from "./inspecciones.service";
 
 @Controller("inspecciones")
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class InspeccionesController {
-  constructor(@Inject(InspeccionesService) private readonly service: InspeccionesService) {}
+  constructor(
+    @Inject(InspeccionesService) private readonly service: InspeccionesService,
+    @Inject(InspeccionesPdfQueueService) private readonly pdfQueue: InspeccionesPdfQueueService
+  ) {}
 
   private buildActor(request: Request & { user?: { roles?: string[]; tenantId?: string; id?: string } }) {
     return {
@@ -85,5 +89,29 @@ export class InspeccionesController {
     response.setHeader("Content-Type", "application/pdf");
     response.setHeader("Content-Disposition", `attachment; filename=inspeccion-${id}.pdf`);
     response.send(buffer);
+  }
+
+  @Post("diarias/:id/pdf/jobs")
+  @Roles("SUPER_ADMIN", "ADMIN", "USER")
+  @RequirePermission({ menuKey: MENU_KEYS.INSPECCION_DIARIA, level: "READ" })
+  enqueuePdfJob(@Param("id") id: string, @Req() request: Request) {
+    return this.pdfQueue.enqueueInspectionPdf(id, this.buildActor(request));
+  }
+
+  @Get("diarias/pdf/jobs/:jobId")
+  @Roles("SUPER_ADMIN", "ADMIN", "USER")
+  @RequirePermission({ menuKey: MENU_KEYS.INSPECCION_DIARIA, level: "READ" })
+  getPdfJobStatus(@Param("jobId") jobId: string, @Req() request: Request) {
+    return this.pdfQueue.getJobStatus(jobId, this.buildActor(request));
+  }
+
+  @Get("diarias/pdf/jobs/:jobId/file")
+  @Roles("SUPER_ADMIN", "ADMIN", "USER")
+  @RequirePermission({ menuKey: MENU_KEYS.INSPECCION_DIARIA, level: "READ" })
+  async downloadPdfJobFile(@Param("jobId") jobId: string, @Req() request: Request, @Res() response: Response) {
+    const file = await this.pdfQueue.readJobFile(jobId, this.buildActor(request));
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader("Content-Disposition", `attachment; filename=${file.fileName}`);
+    response.send(file.buffer);
   }
 }

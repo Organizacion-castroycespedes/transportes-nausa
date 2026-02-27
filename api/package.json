@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start:dev": "tsx watch src/main.ts",
-    "postinstall": "npx puppeteer browsers install chrome",
+    "postinstall": "npx puppeteer browsers install chrome --path ./.cache/puppeteer",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js"
   },
