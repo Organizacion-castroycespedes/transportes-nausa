@@ -1002,7 +1002,7 @@ export class InspeccionesService {
       process.env.INSPECCIONES_PDF_COMPANY_ADDRESS || "Cra 39 #8-59, Malambo, Atlantico";
 
     const sectionLayoutClass = (sectionName: string) => {
-      if (sectionName === "ESTADO_MECANICO") return "card section-wide";
+      if (sectionName === "ESTADO_MECANICO") return "card section-compact section-mecanico";
       if (sectionName === "SEGURIDAD_SOCIAL") return "card section-compact";
       return "card";
     };
@@ -1071,6 +1071,12 @@ export class InspeccionesService {
     });
 
     const sectionsHtml = orderedSections.map(([name, sectionItems]) => renderSection(name, sectionItems)).join("");
+    const totalChecklistItems = orderedSections.reduce((total, [, sectionItems]) => total + sectionItems.length, 0);
+    const longTextThreshold = 220;
+    const hasLargeNarrative =
+      String(diaria.hallazgos ?? "").trim().length > longTextThreshold ||
+      String(diaria.accionesCorrectivas ?? "").trim().length > longTextThreshold;
+    const compactModeClass = totalChecklistItems >= 24 || hasLargeNarrative ? "compact" : "";
     const watermark =
       estadoActual === "DRAFT"
         ? '<div class="watermark">BORRADOR</div>'
@@ -1105,11 +1111,15 @@ export class InspeccionesService {
               padding: 0;
               color: #0f172a;
               font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-              font-size: 10px;
-              line-height: 1.25;
+              font-size: 9.4px;
+              line-height: 1.18;
               background: #ffffff;
             }
             body { padding: 0; }
+            body.compact {
+              font-size: 9px;
+              line-height: 1.14;
+            }
             .sheet { position: relative; }
             .watermark {
               position: fixed;
@@ -1128,24 +1138,24 @@ export class InspeccionesService {
             .content { position: relative; z-index: 1; }
             .header {
               border: 1px solid #cbd5e1;
-              border-radius: 8px;
+              border-radius: 7px;
               overflow: hidden;
-              margin-bottom: 6px;
+              margin-bottom: 4px;
               background: #fff;
             }
             .header-top {
               background: #0f172a;
               color: #fff;
-              padding: 5px 8px;
-              font-size: 10px;
+              padding: 4px 7px;
+              font-size: 9px;
               font-weight: 700;
               letter-spacing: .2px;
             }
             .header-main {
               display: grid;
               grid-template-columns: 60px 1.2fr 1fr;
-              gap: 8px;
-              padding: 6px 8px;
+              gap: 6px;
+              padding: 5px 7px;
               align-items: start;
             }
             .logo-box {
@@ -1161,12 +1171,12 @@ export class InspeccionesService {
             }
             .logo-box img { width: 100%; height: 100%; object-fit: contain; }
             .logo-fallback { color: #64748b; font-size: 8px; font-weight: 700; }
-            .doc-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
-            .company-meta { color: #475569; font-size: 8px; line-height: 1.2; }
-            .header-side { display: grid; gap: 4px; justify-items: end; }
+            .doc-title { font-size: 12px; font-weight: 800; margin-bottom: 1px; }
+            .company-meta { color: #475569; font-size: 7.6px; line-height: 1.15; }
+            .header-side { display: grid; gap: 3px; justify-items: end; }
             .status {
               display: inline-block;
-              padding: 4px 8px;
+              padding: 3px 7px;
               border-radius: 999px;
               background: #64748b;
               color: #fff;
@@ -1183,15 +1193,15 @@ export class InspeccionesService {
             .meta-grid {
               display: grid;
               grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 5px;
-              margin-bottom: 6px;
+              gap: 4px;
+              margin-bottom: 4px;
             }
             .meta-item {
               border: 1px solid #e2e8f0;
-              border-radius: 6px;
-              padding: 4px 6px;
+              border-radius: 5px;
+              padding: 3px 5px;
               background: #fff;
-              min-height: 34px;
+              min-height: 28px;
             }
             .meta-item.critical {
               border-color: #fca5a5;
@@ -1206,9 +1216,9 @@ export class InspeccionesService {
             }
             .meta-value {
               color: #0f172a;
-              font-size: 9px;
+              font-size: 8.2px;
               font-weight: 600;
-              margin-top: 2px;
+              margin-top: 1px;
               word-break: break-word;
             }
             .meta-item.critical .meta-value { color: #991b1b; }
@@ -1216,12 +1226,12 @@ export class InspeccionesService {
             .layout-grid {
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 6px;
+              gap: 4px;
               align-items: start;
             }
             .card {
               border: 1px solid #cbd5e1;
-              border-radius: 8px;
+              border-radius: 7px;
               background: #fff;
               overflow: hidden;
               page-break-inside: avoid;
@@ -1229,9 +1239,13 @@ export class InspeccionesService {
             }
             .section-wide { grid-column: span 2; }
             .section-compact { }
+            .section-mecanico .section-title { padding: 3px 6px; }
+            .section-mecanico .section-table thead th { font-size: 7px; padding: 2px; }
+            .section-mecanico .section-table td { font-size: 7px; padding: 2px; }
+            .section-mecanico .mark { width: 14px; height: 14px; font-size: 6.6px; }
             .section-title {
               background: #e2e8f0;
-              padding: 5px 8px;
+              padding: 4px 7px;
               font-size: 9px;
               font-weight: 800;
               text-transform: uppercase;
@@ -1247,52 +1261,53 @@ export class InspeccionesService {
               color: #fff;
               font-size: 8px;
               font-weight: 700;
-              padding: 3px 4px;
+              padding: 2px 3px;
               border: 1px solid #fff;
               text-align: center;
             }
             .section-table td {
               border: 1px solid #e2e8f0;
-              padding: 3px 4px;
+              padding: 2px 3px;
               vertical-align: top;
-              font-size: 8px;
+              font-size: 7.4px;
             }
             .section-table tbody tr:nth-child(even) td { background: #f8fafc; }
+            .section-table tr { page-break-inside: avoid; break-inside: avoid; }
             .code-cell { width: 48px; text-align: center; font-weight: 700; }
             .concept-cell { width: auto; }
             .concept-main { font-weight: 600; color: #0f172a; }
-            .obs-line { margin-top: 2px; color: #991b1b; font-size: 7px; line-height: 1.15; }
+            .obs-line { margin-top: 1px; color: #991b1b; font-size: 6.8px; line-height: 1.1; }
             .answer-cell { width: 34px; text-align: center; vertical-align: middle !important; padding: 2px !important; }
             .mark {
               display: inline-flex;
               align-items: center;
               justify-content: center;
-              width: 18px;
-              height: 18px;
+              width: 15px;
+              height: 15px;
               border: 1px solid #cbd5e1;
               border-radius: 4px;
               color: #94a3b8;
               background: #fff;
-              font-size: 8px;
+              font-size: 7px;
               font-weight: 800;
             }
             .mark.selected.ok { background: #dcfce7; color: #166534; border-color: #86efac; }
             .mark.selected.no { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-            .mark.selected.na { background: #f1f5f9; color: #475569; border-color: #cbd5e1; width: 22px; }
+            .mark.selected.na { background: #f1f5f9; color: #475569; border-color: #cbd5e1; width: 18px; }
 
             .summary-row {
               display: grid;
               grid-template-columns: 220px 1fr 1fr;
-              gap: 6px;
-              margin-top: 6px;
+              gap: 4px;
+              margin-top: 4px;
               align-items: start;
             }
             .critical-card {
               border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 6px;
+              border-radius: 7px;
+              padding: 5px;
               background: #fff;
-              min-height: 74px;
+              min-height: 62px;
             }
             .critical-card.red {
               border-color: #fca5a5;
@@ -1300,10 +1315,10 @@ export class InspeccionesService {
             }
             .critical-pill {
               display: inline-block;
-              margin-top: 4px;
-              padding: 4px 8px;
+              margin-top: 3px;
+              padding: 3px 7px;
               border-radius: 999px;
-              font-size: 10px;
+              font-size: 8.6px;
               font-weight: 800;
               background: #e2e8f0;
               color: #334155;
@@ -1314,17 +1329,17 @@ export class InspeccionesService {
             }
             .note-card {
               border: 1px solid #cbd5e1;
-              border-radius: 8px;
+              border-radius: 7px;
               background: #fff;
               overflow: hidden;
-              min-height: 74px;
+              min-height: 62px;
             }
             .note-card.warn { border-color: #fcd34d; background: #fffbeb; }
             .note-title {
-              padding: 5px 8px;
+              padding: 4px 7px;
               background: #f1f5f9;
               border-bottom: 1px solid #e2e8f0;
-              font-size: 8px;
+              font-size: 7px;
               font-weight: 800;
               text-transform: uppercase;
             }
@@ -1334,50 +1349,61 @@ export class InspeccionesService {
               color: #92400e;
             }
             .note-body {
-              padding: 6px 8px;
-              font-size: 8px;
+              padding: 5px 7px;
+              font-size: 7.1px;
               white-space: pre-wrap;
               word-break: break-word;
-              min-height: 48px;
+              min-height: 42px;
             }
 
             .footer-block {
-              margin-top: 6px;
+              margin-top: 4px;
               border: 1px solid #cbd5e1;
-              border-radius: 8px;
+              border-radius: 7px;
               background: #fff;
-              padding: 6px 8px;
+              padding: 5px 7px;
               page-break-inside: avoid;
               break-inside: avoid;
             }
             .signature-grid {
               display: grid;
               grid-template-columns: 1fr 1fr auto;
-              gap: 12px;
+              gap: 8px;
               align-items: end;
             }
             .sig-line {
               border-top: 1px solid #64748b;
-              padding-top: 4px;
-              min-height: 28px;
-              font-size: 8px;
+              padding-top: 3px;
+              min-height: 22px;
+              font-size: 7.2px;
               color: #475569;
               text-align: center;
             }
             .audit-box {
               border: 1px dashed #cbd5e1;
               border-radius: 6px;
-              padding: 5px 8px;
-              min-width: 170px;
-              font-size: 7px;
+              padding: 4px 6px;
+              min-width: 145px;
+              font-size: 6.6px;
               color: #475569;
               background: #f8fafc;
             }
             .audit-box strong { color: #334155; }
             .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+            body.compact .header-top { padding: 3px 6px; }
+            body.compact .header-main { padding: 4px 6px; gap: 5px; }
+            body.compact .meta-grid { gap: 3px; margin-bottom: 3px; }
+            body.compact .layout-grid { gap: 3px; }
+            body.compact .summary-row { margin-top: 3px; gap: 3px; }
+            body.compact .footer-block { margin-top: 3px; padding: 4px 6px; }
+            body.compact .section-table td,
+            body.compact .section-table thead th { padding: 2px; }
+            body.compact .critical-card,
+            body.compact .note-card { min-height: 56px; }
+            body.compact .note-body { min-height: 36px; }
           </style>
         </head>
-        <body>
+        <body class="${compactModeClass}">
           <div class="sheet">
             ${watermark}
             <div class="content">
@@ -1470,6 +1496,8 @@ export class InspeccionesService {
         format: "letter",
         landscape: true,
         printBackground: true,
+        preferCSSPageSize: true,
+        scale: totalChecklistItems >= 30 || hasLargeNarrative ? 0.9 : 0.92,
         margin: {
           top: "10mm",
           right: "10mm",
