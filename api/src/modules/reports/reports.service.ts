@@ -12,6 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import nodemailer from "nodemailer";
 import PDFDocument from "pdfkit";
+import { InspeccionesService } from "../inspecciones/inspecciones.service";
 import type { SendBulkInspectionsReportDto } from "./dto/send-bulk-inspections-report.dto";
 import type { ListReportInspectionsQueryDto } from "./dto/list-report-inspections-query.dto";
 import { ReportsRepository, type InspectionRow } from "./reports.repository";
@@ -36,7 +37,8 @@ export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
 
   constructor(
-    @Inject(ReportsRepository) private readonly repository: ReportsRepository
+    @Inject(ReportsRepository) private readonly repository: ReportsRepository,
+    @Inject(InspeccionesService) private readonly inspeccionesService: InspeccionesService
   ) {}
 
   private requireTenant(actor: ActorContext) {
@@ -264,7 +266,13 @@ export class ReportsService {
     if (!row) {
       throw new NotFoundException("Inspeccion no encontrada");
     }
-    return this.buildSingleInspectionPdf(row);
+    return this.inspeccionesService.getPdf(id, {
+      userId: actor.userId,
+      tenantId: actor.tenantId,
+      roles: actor.roles,
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
   }
 
   async sendBulkInspections(payload: SendBulkInspectionsReportDto, actor: ActorContext) {
@@ -519,23 +527,180 @@ export class ReportsService {
   }
 
   private addDocumentHeader(doc: any, title: string) {
+    const companyName = process.env.REPORTS_COMPANY_NAME || "TRANSPORTES NAUSA LTDA.";
+    const companyNit = process.env.REPORTS_COMPANY_NIT || "NIT 900078756-1";
+    const companyPhone = process.env.REPORTS_COMPANY_PHONE || "+57 313 531 6370";
+    const companyEmail = process.env.REPORTS_COMPANY_EMAIL || "transnausa@hotmail.com";
+    const companyAddress =
+      process.env.REPORTS_COMPANY_ADDRESS || "Cra 39 #8-59, Malambo, Atlantico";
+    const pageWidth = doc.page.width;
+    const margin = 40;
+    const headerTop = 28;
+    const headerHeight = 95;
+    const headerLeft = margin;
+    const headerWidth = pageWidth - margin * 2;
+
+    doc.save();
+    doc.roundedRect(headerLeft, headerTop, headerWidth, headerHeight, 10).fill("#F8FAFC");
+    doc
+      .lineWidth(1)
+      .strokeColor("#D1D5DB")
+      .roundedRect(headerLeft, headerTop, headerWidth, headerHeight, 10)
+      .stroke();
+    doc
+      .roundedRect(headerLeft, headerTop, headerWidth, 26, 10)
+      .fill("#0F766E");
+    doc.restore();
+
     const logoPath = this.resolveLogoPath();
     if (logoPath) {
       try {
-        doc.image(logoPath, 40, 36, { fit: [72, 72] });
+        doc.image(logoPath, 52, 48, { fit: [62, 62], align: "center", valign: "center" });
       } catch {
         // ignore invalid image
       }
     }
-    doc.fontSize(18).text(title, 120, 40);
-    doc.fontSize(10).fillColor("black").text(`Generado: ${new Date().toISOString()}`, 120, 64);
-    doc.moveDown(2);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#FFFFFF")
+      .text(companyName, headerLeft + 14, headerTop + 8, { width: headerWidth - 28, align: "left" });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(16)
+      .fillColor("#111827")
+      .text(title, 126, 48, { width: 250 });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#374151")
+      .text(`${companyNit}`, 126, 70)
+      .text(`Tel: ${companyPhone}`, 126, 84);
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#374151")
+      .text(`Email: ${companyEmail}`, 360, 48, { width: 180, align: "left" })
+      .text(`Direccion: ${companyAddress}`, 360, 62, { width: 180, align: "left" })
+      .text(`Generado: ${new Date().toLocaleString("es-CO")}`, 360, 84, {
+        width: 180,
+        align: "left",
+      });
+
+    doc.y = headerTop + headerHeight + 18;
+    doc.strokeColor("#E5E7EB").moveTo(margin, doc.y - 8).lineTo(pageWidth - margin, doc.y - 8).stroke();
+    doc.fillColor("#111827");
   }
 
   private ensureDocSpace(doc: any, minY = 720) {
     if (doc.y > minY) {
       doc.addPage();
     }
+  }
+
+  private drawSectionTitle(doc: any, title: string) {
+    this.ensureDocSpace(doc, 700);
+    const x = 40;
+    const y = doc.y;
+    const w = doc.page.width - 80;
+    doc.save();
+    doc.roundedRect(x, y, w, 20, 6).fill("#E0F2FE");
+    doc.restore();
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .fillColor("#0C4A6E")
+      .text(title, x + 10, y + 5, { width: w - 20 });
+    doc.fillColor("#111827");
+    doc.y = y + 28;
+  }
+
+  private drawInfoRow(doc: any, label: string, value: string, shaded = false) {
+    this.ensureDocSpace(doc, 730);
+    const x = 40;
+    const width = doc.page.width - 80;
+    const labelWidth = 150;
+    const valueWidth = width - labelWidth - 20;
+    const rowY = doc.y;
+    const valueText = value || "N/A";
+    const labelHeight = doc.heightOfString(label, { width: labelWidth, align: "left" });
+    const valueHeight = doc.heightOfString(valueText, { width: valueWidth, align: "left" });
+    const rowHeight = Math.max(20, labelHeight, valueHeight) + 8;
+
+    if (shaded) {
+      doc.save();
+      doc.roundedRect(x, rowY - 2, width, rowHeight, 4).fill("#F9FAFB");
+      doc.restore();
+    }
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#374151")
+      .text(label, x + 8, rowY + 3, { width: labelWidth });
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor("#111827")
+      .text(valueText, x + labelWidth + 12, rowY + 3, { width: valueWidth });
+
+    doc.y = rowY + rowHeight + 2;
+  }
+
+  private drawChecklistTable(doc: any, checklistLines: Array<{ label: string; value: string }>) {
+    const x = 40;
+    const width = doc.page.width - 80;
+    const labelWidth = Math.floor(width * 0.58);
+    const valueWidth = width - labelWidth - 2;
+
+    this.ensureDocSpace(doc, 690);
+    const headerY = doc.y;
+    doc.save();
+    doc.roundedRect(x, headerY, width, 22, 6).fill("#0F172A");
+    doc.restore();
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("#FFFFFF")
+      .text("ITEM", x + 8, headerY + 7, { width: labelWidth - 10 });
+    doc.text("VALOR", x + labelWidth + 8, headerY + 7, { width: valueWidth - 10 });
+    doc.fillColor("#111827");
+    doc.y = headerY + 26;
+
+    if (checklistLines.length === 0) {
+      this.drawInfoRow(doc, "Checklist", "Sin items en payload.");
+      return;
+    }
+
+    checklistLines.slice(0, 200).forEach((line, index) => {
+      this.ensureDocSpace(doc, 730);
+      const rowY = doc.y;
+      const labelText = line.label || "-";
+      const valueText = line.value || "-";
+      const lh = doc.heightOfString(labelText, { width: labelWidth - 12 });
+      const vh = doc.heightOfString(valueText, { width: valueWidth - 12 });
+      const rowHeight = Math.max(18, lh, vh) + 8;
+
+      if (index % 2 === 0) {
+        doc.save();
+        doc.rect(x, rowY - 1, width, rowHeight).fill("#F8FAFC");
+        doc.restore();
+      }
+
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("#111827")
+        .text(labelText, x + 6, rowY + 3, { width: labelWidth - 12 });
+      doc.text(valueText, x + labelWidth + 6, rowY + 3, { width: valueWidth - 12 });
+
+      doc
+        .strokeColor("#E5E7EB")
+        .moveTo(x, rowY + rowHeight)
+        .lineTo(x + width, rowY + rowHeight)
+        .stroke();
+      doc.y = rowY + rowHeight + 2;
+    });
   }
 
   private async finalizePdf(doc: any) {
@@ -553,32 +718,24 @@ export class ReportsService {
   private async buildSingleInspectionPdf(row: InspectionRow) {
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     this.addDocumentHeader(doc, `Inspeccion #${row.id}`);
+    this.drawSectionTitle(doc, "Datos generales");
+    this.drawInfoRow(doc, "Conductor", row.driver_name ?? "N/A", true);
+    this.drawInfoRow(doc, "Vehiculo", row.vehicle_label ?? "N/A");
+    this.drawInfoRow(doc, "Fecha de inspeccion", row.inspection_date, true);
+    this.drawInfoRow(doc, "Estado final", row.status);
+    this.drawInfoRow(doc, "Creado por", row.creator_name ?? row.created_by, true);
+    doc.moveDown(0.4);
 
-    doc.fontSize(12).text(`Conductor: ${row.driver_name ?? "N/A"}`);
-    doc.text(`Vehiculo: ${row.vehicle_label ?? "N/A"}`);
-    doc.text(`Fecha: ${row.inspection_date}`);
-    doc.text(`Estado final: ${row.status}`);
-    doc.text(`Creado por: ${row.creator_name ?? row.created_by}`);
-    doc.moveDown();
-
-    doc.fontSize(13).text("Checklist", { underline: true });
-    doc.moveDown(0.5);
+    this.drawSectionTitle(doc, "Checklist de inspeccion");
     const checklistLines = this.extractChecklistLines(row.payload);
-    if (checklistLines.length === 0) {
-      doc.fontSize(10).text("Sin items en payload.");
-    } else {
-      checklistLines.slice(0, 200).forEach((line) => {
-        this.ensureDocSpace(doc);
-        doc.fontSize(10).text(`- ${line.label}: ${line.value}`);
-      });
-    }
+    this.drawChecklistTable(doc, checklistLines);
 
     const signature = this.getSignatureValue(row.payload);
     if (signature) {
       this.ensureDocSpace(doc, 680);
       doc.moveDown();
-      doc.fontSize(12).text("Firma digital", { underline: true });
-      doc.fontSize(10).text(signature);
+      this.drawSectionTitle(doc, "Firma digital");
+      this.drawInfoRow(doc, "Firma", signature);
     }
 
     return this.finalizePdf(doc);
@@ -591,37 +748,30 @@ export class ReportsService {
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     this.addDocumentHeader(doc, "Reporte consolidado de inspecciones");
 
-    doc.fontSize(11).text(`Tenant: ${metadata.tenantId}`);
-    doc.text(`Frecuencia: ${metadata.frequency}`);
-    doc.text(`Rango: ${metadata.startDate} a ${metadata.endDate}`);
-    doc.text(`Total inspecciones: ${inspections.length}`);
-    doc.moveDown();
+    this.drawSectionTitle(doc, "Resumen del reporte");
+    this.drawInfoRow(doc, "Tenant", metadata.tenantId, true);
+    this.drawInfoRow(doc, "Frecuencia", metadata.frequency);
+    this.drawInfoRow(doc, "Rango", `${metadata.startDate} a ${metadata.endDate}`, true);
+    this.drawInfoRow(doc, "Total inspecciones", String(inspections.length));
+    doc.moveDown(0.4);
 
     if (inspections.length === 0) {
-      doc.fontSize(11).text("No se encontraron inspecciones para el rango indicado.");
+      this.drawInfoRow(doc, "Resultado", "No se encontraron inspecciones para el rango indicado.");
       return this.finalizePdf(doc);
     }
 
     inspections.forEach((row, index) => {
       this.ensureDocSpace(doc, 650);
-      doc
-        .fontSize(12)
-        .text(`${index + 1}. Inspeccion #${row.id} - ${row.inspection_date}`, {
-          underline: true,
-        });
-      doc.fontSize(10).text(`Conductor: ${row.driver_name ?? "N/A"}`);
-      doc.text(`Vehiculo: ${row.vehicle_label ?? "N/A"}`);
-      doc.text(`Estado: ${row.status}`);
+      this.drawSectionTitle(doc, `${index + 1}. Inspeccion #${row.id} - ${row.inspection_date}`);
+      this.drawInfoRow(doc, "Conductor", row.driver_name ?? "N/A", true);
+      this.drawInfoRow(doc, "Vehiculo", row.vehicle_label ?? "N/A");
+      this.drawInfoRow(doc, "Estado", row.status, true);
 
       const checklistPreview = this.extractChecklistLines(row.payload).slice(0, 12);
       if (checklistPreview.length > 0) {
-        doc.moveDown(0.3);
-        checklistPreview.forEach((line) => {
-          this.ensureDocSpace(doc);
-          doc.text(`- ${line.label}: ${line.value}`);
-        });
+        this.drawChecklistTable(doc, checklistPreview);
       }
-      doc.moveDown();
+      doc.moveDown(0.6);
     });
 
     return this.finalizePdf(doc);

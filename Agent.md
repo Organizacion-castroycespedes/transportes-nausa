@@ -191,6 +191,19 @@ Backend:
 - Guards en endpoints sensibles
 - Filtrado por tenant en servicios
 
+## 9.1 Regla PDF Inspecciones (Actualizado)
+Implementacion oficial vigente:
+- Motor PDF: `HTML + Puppeteer` (backend `api/`), no `pdfkit` para inspeccion diaria.
+- Formato de salida: `letter`, `landscape`, `printBackground: true`, margenes de `10mm`.
+- Layout base: encabezado corporativo compacto + grid por secciones + matriz `Concepto | ✔ | ✖ | N/A`.
+
+Reglas obligatorias para cambios futuros:
+1. Cualquier ajuste visual del PDF de inspeccion diaria se hace en `api/src/modules/inspecciones/inspecciones.service.ts` (`buildPdf`).
+2. No duplicar logica de plantilla entre modulos.
+3. `GET /api/reports/inspections/:id/pdf` debe reutilizar `InspeccionesService.getPdf(...)` para mantener un unico formato.
+4. En descarga de PDF se regenera con plantilla vigente y se guarda nueva version en `inspecciones.archivos_pdf`.
+5. Si se cambia tamaño/orientacion/margenes, documentar el cambio en `docs/inspeccion-diaria.md`.
+
 ## 10. Runbook de Arranque
 Backend (`api/`):
 - Instalar: `npm install`
